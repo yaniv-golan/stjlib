@@ -1,4 +1,4 @@
-name: Python package
+name: CI
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     strategy:
@@ -26,6 +25,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
         pip install -r requirements-dev.txt
-    - name: Test with unittest
+    - name: Lint with flake8
       run: |
-        python -m unittest discover tests
+        flake8 src/
+    - name: Format code with black
+      run: |
+        black --check src/
+    - name: Test with pytest
+      run: |
+        pytest
+    - name: Build documentation
+      run: |
+        cd docs
+        make html
