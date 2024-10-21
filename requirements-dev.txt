@@ -1,0 +1,9 @@
+pytest==7.3.1
+black==23.3.0          # Code formatter
+flake8==6.0.0          # Linting tool
+mypy==1.5.1            # Static type checker
+pytest-cov==4.0.0      # Coverage plugin for pytest
+isort==5.13.2
+sphinx
+sphinx_rtd_theme
+iso639-lang>=2.4.2

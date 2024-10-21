@@ -13,27 +13,34 @@ https://github.com/yaniv-golan/STJ
 Updated to support STJ version 0.4 with improved practices.
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
 import json
-from iso639 import Lang, exceptions as iso639_exceptions
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from iso639 import Lang
+
 
 # Custom Exceptions and Validation Classes
 class STJError(Exception):
     """Base class for exceptions in the STJ module."""
+
     pass
+
 
 class ValidationError(STJError):
     """Raised when validation fails and contains a list of validation issues."""
 
-    def __init__(self, issues: List['ValidationIssue']):
+    def __init__(self, issues: List["ValidationIssue"]):
         self.issues = issues
         super().__init__(self.__str__())
 
     def __str__(self):
-        return "Validation failed with the following issues:\n" + "\n".join(str(issue) for issue in self.issues)
+        return "Validation failed with the following issues:\n" + "\n".join(
+            str(issue) for issue in self.issues
+        )
+
 
 @dataclass
 class ValidationIssue:
@@ -46,17 +53,21 @@ class ValidationIssue:
         else:
             return self.message
 
+
 # Enums
 class WordTimingMode(Enum):
-    COMPLETE = 'complete'
-    PARTIAL = 'partial'
-    NONE = 'none'
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    NONE = "none"
+
 
 class SegmentDuration(Enum):
-    ZERO = 'zero'
+    ZERO = "zero"
+
 
 class WordDuration(Enum):
-    ZERO = 'zero'
+    ZERO = "zero"
+
 
 # Data Classes
 @dataclass
@@ -68,8 +79,10 @@ class Transcriber:
         name (str): Name of the transcriber.
         version (str): Version of the transcriber.
     """
+
     name: str
     version: str
+
 
 @dataclass
 class Source:
@@ -82,10 +95,12 @@ class Source:
         languages (Optional[List[Lang]]): List of languages in the source.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     uri: Optional[str] = None
     duration: Optional[float] = None
     languages: Optional[List[Lang]] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Metadata:
@@ -100,12 +115,14 @@ class Metadata:
         confidence_threshold (Optional[float]): Confidence threshold between 0.0 and 1.0.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     transcriber: Transcriber
     created_at: datetime  # Use datetime type
     source: Optional[Source] = None
     languages: Optional[List[Lang]] = None
     confidence_threshold: Optional[float] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Speaker:
@@ -117,9 +134,11 @@ class Speaker:
         name (Optional[str]): Name of the speaker.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     id: str
     name: Optional[str] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Style:
@@ -133,11 +152,13 @@ class Style:
         positioning (Optional[Dict[str, Any]]): Positioning information.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     id: str
     description: Optional[str] = None
     formatting: Optional[Dict[str, Any]] = None
     positioning: Optional[Dict[str, Any]] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Word:
@@ -151,11 +172,13 @@ class Word:
         confidence (Optional[float]): Confidence score between 0.0 and 1.0.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     start: float
     end: float
     text: str
     confidence: Optional[float] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class Segment:
@@ -174,6 +197,7 @@ class Segment:
         word_timing_mode (Optional[WordTimingMode]): Word timing mode.
         additional_info (Dict[str, Any]): Additional metadata.
     """
+
     start: float
     end: float
     text: str
@@ -185,6 +209,7 @@ class Segment:
     word_timing_mode: Optional[WordTimingMode] = None
     additional_info: Dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class Transcript:
     """
@@ -195,9 +220,11 @@ class Transcript:
         segments (List[Segment]): List of segments.
         styles (Optional[List[Style]]): List of styles.
     """
+
     speakers: List[Speaker] = field(default_factory=list)
     segments: List[Segment] = field(default_factory=list)
     styles: Optional[List[Style]] = None
+
 
 @dataclass
 class StandardTranscriptionJSON:
@@ -208,11 +235,14 @@ class StandardTranscriptionJSON:
         metadata (Metadata): Metadata of the STJ.
         transcript (Transcript): Transcript data.
     """
+
     metadata: Metadata
     transcript: Transcript
 
     @classmethod
-    def from_file(cls, filename: str, validate: bool = False, raise_exception: bool = True) -> 'StandardTranscriptionJSON':
+    def from_file(
+        cls, filename: str, validate: bool = False, raise_exception: bool = True
+    ) -> "StandardTranscriptionJSON":
         """
         Load an STJ instance from a JSON file.
 
@@ -222,7 +252,7 @@ class StandardTranscriptionJSON:
         :return: StandardTranscriptionJSON instance.
         """
         try:
-            with open(filename, 'r', encoding='utf-8') as f:
+            with open(filename, "r", encoding="utf-8") as f:
                 data = json.load(f)
             stj_instance = cls.from_dict(data)
             if validate:
@@ -233,10 +263,12 @@ class StandardTranscriptionJSON:
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(f"JSON decode error: {e.msg}", e.doc, e.pos)
         except Exception as e:
-            raise STJError(f"An unexpected error occurred while loading the file: {e}") from e
+            raise STJError(
+                f"An unexpected error occurred while loading the file: {e}"
+            ) from e
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StandardTranscriptionJSON':
+    def from_dict(cls, data: Dict[str, Any]) -> "StandardTranscriptionJSON":
         """
         Create an STJ instance from a dictionary.
 
@@ -244,9 +276,9 @@ class StandardTranscriptionJSON:
         :return: StandardTranscriptionJSON instance.
         """
         # Deserialize metadata
-        metadata = cls._deserialize_metadata(data.get('metadata', {}))
+        metadata = cls._deserialize_metadata(data.get("metadata", {}))
         # Deserialize transcript
-        transcript = cls._deserialize_transcript(data.get('transcript', {}))
+        transcript = cls._deserialize_transcript(data.get("transcript", {}))
         return cls(metadata=metadata, transcript=transcript)
 
     @staticmethod
@@ -258,38 +290,61 @@ class StandardTranscriptionJSON:
         :return: Metadata instance.
         """
         # Check for required fields
-        if 'transcriber' not in data:
+        if "transcriber" not in data:
             raise KeyError("Missing required field: 'transcriber' in metadata.")
-        if 'created_at' not in data:
+        if "created_at" not in data:
             raise KeyError("Missing required field: 'created_at' in metadata.")
 
-        transcriber_data = data.get('transcriber', {})
+        transcriber_data = data.get("transcriber", {})
         transcriber = Transcriber(**transcriber_data)
-        created_at_str = data.get('created_at')
-        created_at = datetime.fromisoformat(created_at_str.rstrip('Z')) if created_at_str else datetime.now(timezone.utc)
+        created_at_str = data.get("created_at")
+        created_at = (
+            datetime.fromisoformat(created_at_str.rstrip("Z"))
+            if created_at_str
+            else datetime.now(timezone.utc)
+        )
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
 
         source = None
-        if 'source' in data:
-            source_data = data['source']
-            source_languages = [Lang(code) for code in source_data.get('languages', [])]
-            source_additional_info = {k: v for k, v in source_data.items() if k not in {'uri', 'duration', 'languages'}}
+        if "source" in data:
+            source_data = data["source"]
+            source_languages = [Lang(code) for code in source_data.get("languages", [])]
+            source_additional_info = {
+                k: v
+                for k, v in source_data.items()
+                if k not in {"uri", "duration", "languages"}
+            }
             source = Source(
-                uri=source_data.get('uri'),
-                duration=source_data.get('duration'),
+                uri=source_data.get("uri"),
+                duration=source_data.get("duration"),
                 languages=source_languages if source_languages else None,
-                additional_info=source_additional_info
+                additional_info=source_additional_info,
             )
-        metadata_languages = [Lang(code) for code in data.get('languages', [])] if data.get('languages') else None
-        additional_info = {k: v for k, v in data.items() if k not in {'transcriber', 'created_at', 'source', 'languages', 'confidence_threshold'}}
+        metadata_languages = (
+            [Lang(code) for code in data.get("languages", [])]
+            if data.get("languages")
+            else None
+        )
+        additional_info = {
+            k: v
+            for k, v in data.items()
+            if k
+            not in {
+                "transcriber",
+                "created_at",
+                "source",
+                "languages",
+                "confidence_threshold",
+            }
+        }
         return Metadata(
             transcriber=transcriber,
             created_at=created_at,
             source=source,
             languages=metadata_languages,
-            confidence_threshold=data.get('confidence_threshold'),
-            additional_info=additional_info
+            confidence_threshold=data.get("confidence_threshold"),
+            additional_info=additional_info,
         )
 
     @staticmethod
@@ -301,59 +356,80 @@ class StandardTranscriptionJSON:
         :return: Transcript instance.
         """
         speakers = []
-        for s in data.get('speakers', []):
-            additional_info = {k: v for k, v in s.items() if k not in {'id', 'name'}}
+        for s in data.get("speakers", []):
+            additional_info = {k: v for k, v in s.items() if k not in {"id", "name"}}
             speaker = Speaker(
-                id=s['id'],
-                name=s.get('name'),
-                additional_info=additional_info
+                id=s["id"], name=s.get("name"), additional_info=additional_info
             )
             speakers.append(speaker)
 
         styles = []
-        for s in data.get('styles', []):
-            additional_info = {k: v for k, v in s.items() if k not in {'id', 'description', 'formatting', 'positioning'}}
+        for s in data.get("styles", []):
+            additional_info = {
+                k: v
+                for k, v in s.items()
+                if k not in {"id", "description", "formatting", "positioning"}
+            }
             style = Style(
-                id=s['id'],
-                description=s.get('description'),
-                formatting=s.get('formatting'),
-                positioning=s.get('positioning'),
-                additional_info=additional_info
+                id=s["id"],
+                description=s.get("description"),
+                formatting=s.get("formatting"),
+                positioning=s.get("positioning"),
+                additional_info=additional_info,
             )
             styles.append(style)
         styles = styles if styles else None
 
         segments = []
-        for s in data.get('segments', []):
+        for s in data.get("segments", []):
             words = []
-            for w in s.get('words', []):
-                word_additional_info = {k: v for k, v in w.items() if k not in {'start', 'end', 'text', 'confidence'}}
+            for w in s.get("words", []):
+                word_additional_info = {
+                    k: v
+                    for k, v in w.items()
+                    if k not in {"start", "end", "text", "confidence"}
+                }
                 word = Word(
-                    start=w['start'],
-                    end=w['end'],
-                    text=w['text'],
-                    confidence=w.get('confidence'),
-                    additional_info=word_additional_info
+                    start=w["start"],
+                    end=w["end"],
+                    text=w["text"],
+                    confidence=w.get("confidence"),
+                    additional_info=word_additional_info,
                 )
                 words.append(word)
             words = words if words else None
 
-            language = Lang(s['language']) if s.get('language') else None
-            word_timing_mode = s.get('word_timing_mode')
+            language = Lang(s["language"]) if s.get("language") else None
+            word_timing_mode = s.get("word_timing_mode")
             if word_timing_mode:
                 word_timing_mode = WordTimingMode(word_timing_mode)
-            segment_additional_info = {k: v for k, v in s.items() if k not in {'start', 'end', 'text', 'speaker_id', 'confidence', 'language', 'style_id', 'words', 'word_timing_mode'}}
+            segment_additional_info = {
+                k: v
+                for k, v in s.items()
+                if k
+                not in {
+                    "start",
+                    "end",
+                    "text",
+                    "speaker_id",
+                    "confidence",
+                    "language",
+                    "style_id",
+                    "words",
+                    "word_timing_mode",
+                }
+            }
             segment = Segment(
-                start=s['start'],
-                end=s['end'],
-                text=s['text'],
-                speaker_id=s.get('speaker_id'),
-                confidence=s.get('confidence'),
+                start=s["start"],
+                end=s["end"],
+                text=s["text"],
+                speaker_id=s.get("speaker_id"),
+                confidence=s.get("confidence"),
                 language=language,
-                style_id=s.get('style_id'),
+                style_id=s.get("style_id"),
                 words=words,
                 word_timing_mode=word_timing_mode,
-                additional_info=segment_additional_info
+                additional_info=segment_additional_info,
             )
             segments.append(segment)
         return Transcript(speakers=speakers, segments=segments, styles=styles)
@@ -366,7 +442,7 @@ class StandardTranscriptionJSON:
         """
         data = self.to_dict()
         try:
-            with open(filename, 'w', encoding='utf-8') as f:
+            with open(filename, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except IOError as e:
             raise IOError(f"Error writing to file {filename}: {e}")
@@ -390,11 +466,15 @@ class StandardTranscriptionJSON:
         :return: Serialized data.
         """
         if isinstance(data, dict):
-            return {key: self._custom_serialize(value) for key, value in data.items() if value is not None}
+            return {
+                key: self._custom_serialize(value)
+                for key, value in data.items()
+                if value is not None
+            }
         elif isinstance(data, list):
             return [self._custom_serialize(item) for item in data]
         elif isinstance(data, datetime):
-            return data.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+            return data.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         elif isinstance(data, Lang):
             return data.pt1 or data.pt3
         elif isinstance(data, Enum):
@@ -431,26 +511,32 @@ class StandardTranscriptionJSON:
         if self.metadata.languages:
             for lang in self.metadata.languages:
                 if not lang.pt1 and not lang.pt3:
-                    issues.append(ValidationIssue(
-                        message=f"Invalid language code in metadata: {lang}",
-                        location="Metadata.languages"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in metadata: {lang}",
+                            location="Metadata.languages",
+                        )
+                    )
         # Validate source languages
         if self.metadata.source and self.metadata.source.languages:
             for lang in self.metadata.source.languages:
                 if not lang.pt1 and not lang.pt3:
-                    issues.append(ValidationIssue(
-                        message=f"Invalid language code in source: {lang}",
-                        location="Metadata.source.languages"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in source: {lang}",
+                            location="Metadata.source.languages",
+                        )
+                    )
         # Validate segment languages
         for idx, segment in enumerate(self.transcript.segments):
             if segment.language:
                 if not segment.language.pt1 and not segment.language.pt3:
-                    issues.append(ValidationIssue(
-                        message=f"Invalid language code in segment",
-                        location=f"Segment[{idx}] starting at {segment.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in segment",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
         return issues
 
     def _validate_confidence_threshold(self) -> List[ValidationIssue]:
@@ -462,10 +548,12 @@ class StandardTranscriptionJSON:
         issues = []
         if self.metadata.confidence_threshold is not None:
             if not (0.0 <= self.metadata.confidence_threshold <= 1.0):
-                issues.append(ValidationIssue(
-                    message=f"confidence_threshold {self.metadata.confidence_threshold} out of range [0.0, 1.0]",
-                    location="Metadata.confidence_threshold"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message=f"confidence_threshold {self.metadata.confidence_threshold} out of range [0.0, 1.0]",
+                        location="Metadata.confidence_threshold",
+                    )
+                )
         return issues
 
     def _validate_speaker_and_style_ids(self) -> List[ValidationIssue]:
@@ -477,20 +565,28 @@ class StandardTranscriptionJSON:
         issues = []
         # Build sets of valid speaker and style IDs
         valid_speaker_ids = {speaker.id for speaker in self.transcript.speakers}
-        valid_style_ids = {style.id for style in self.transcript.styles} if self.transcript.styles else set()
+        valid_style_ids = (
+            {style.id for style in self.transcript.styles}
+            if self.transcript.styles
+            else set()
+        )
 
         # Validate speaker_id and style_id in segments
         for idx, segment in enumerate(self.transcript.segments):
             if segment.speaker_id and segment.speaker_id not in valid_speaker_ids:
-                issues.append(ValidationIssue(
-                    message=f"Invalid speaker_id '{segment.speaker_id}'",
-                    location=f"Segment[{idx}] starting at {segment.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid speaker_id '{segment.speaker_id}'",
+                        location=f"Segment[{idx}] starting at {segment.start}",
+                    )
+                )
             if segment.style_id and segment.style_id not in valid_style_ids:
-                issues.append(ValidationIssue(
-                    message=f"Invalid style_id '{segment.style_id}'",
-                    location=f"Segment[{idx}] starting at {segment.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid style_id '{segment.style_id}'",
+                        location=f"Segment[{idx}] starting at {segment.start}",
+                    )
+                )
         return issues
 
     def _validate_segments(self) -> List[ValidationIssue]:
@@ -504,27 +600,35 @@ class StandardTranscriptionJSON:
         previous_end = -1
         for idx, segment in enumerate(self.transcript.segments):
             if segment.start < previous_end:
-                issues.append(ValidationIssue(
-                    message="Segments overlap or are out of order",
-                    location=f"Segment[{idx}] starting at {segment.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message="Segments overlap or are out of order",
+                        location=f"Segment[{idx}] starting at {segment.start}",
+                    )
+                )
             if segment.start == segment.end:
-                segment_duration = segment.additional_info.get('segment_duration')
+                segment_duration = segment.additional_info.get("segment_duration")
                 if segment_duration != SegmentDuration.ZERO.value:
-                    issues.append(ValidationIssue(
-                        message=f"Zero-duration segment without 'segment_duration' set to '{SegmentDuration.ZERO.value}'",
-                        location=f"Segment[{idx}] starting at {segment.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Zero-duration segment without 'segment_duration' set to '{SegmentDuration.ZERO.value}'",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
                 elif segment_duration not in [e.value for e in SegmentDuration]:
-                    issues.append(ValidationIssue(
-                        message=f"Invalid 'segment_duration' value: {segment_duration}",
-                        location=f"Segment[{idx}] starting at {segment.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid 'segment_duration' value: {segment_duration}",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
             issues.extend(self._validate_words_in_segment(segment, idx))
             previous_end = segment.end
         return issues
 
-    def _validate_words_in_segment(self, segment: Segment, segment_idx: int) -> List[ValidationIssue]:
+    def _validate_words_in_segment(
+        self, segment: Segment, segment_idx: int
+    ) -> List[ValidationIssue]:
         """
         Validate words within a segment.
 
@@ -534,60 +638,76 @@ class StandardTranscriptionJSON:
         """
         issues = []
         words = segment.words or []
-        word_timing_mode = segment.word_timing_mode or (WordTimingMode.COMPLETE if words else WordTimingMode.NONE)
+        word_timing_mode = segment.word_timing_mode or (
+            WordTimingMode.COMPLETE if words else WordTimingMode.NONE
+        )
 
         if word_timing_mode not in WordTimingMode:
-            issues.append(ValidationIssue(
-                message="Invalid 'word_timing_mode'",
-                location=f"Segment[{segment_idx}] starting at {segment.start}"
-            ))
+            issues.append(
+                ValidationIssue(
+                    message="Invalid 'word_timing_mode'",
+                    location=f"Segment[{segment_idx}] starting at {segment.start}",
+                )
+            )
 
         if word_timing_mode != WordTimingMode.NONE and not words:
-            issues.append(ValidationIssue(
-                message=f"'word_timing_mode' is '{word_timing_mode.value}' but no words are provided",
-                location=f"Segment[{segment_idx}] starting at {segment.start}"
-            ))
+            issues.append(
+                ValidationIssue(
+                    message=f"'word_timing_mode' is '{word_timing_mode.value}' but no words are provided",
+                    location=f"Segment[{segment_idx}] starting at {segment.start}",
+                )
+            )
 
         previous_word_end = segment.start
-        concatenated_words = ''
+        concatenated_words = ""
         for word_idx, word in enumerate(words):
             if word.start < segment.start or word.end > segment.end:
-                issues.append(ValidationIssue(
-                    message="Word timings are outside segment timings",
-                    location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message="Word timings are outside segment timings",
+                        location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
+                    )
+                )
 
             if word.start < previous_word_end:
-                issues.append(ValidationIssue(
-                    message="Words overlap or are out of order",
-                    location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message="Words overlap or are out of order",
+                        location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
+                    )
+                )
 
             if word.start == word.end:
-                word_duration = word.additional_info.get('word_duration')
+                word_duration = word.additional_info.get("word_duration")
                 if word_duration != WordDuration.ZERO.value:
-                    issues.append(ValidationIssue(
-                        message=f"Zero-duration word without 'word_duration' set to '{WordDuration.ZERO.value}'",
-                        location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Zero-duration word without 'word_duration' set to '{WordDuration.ZERO.value}'",
+                            location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
+                        )
+                    )
                 elif word_duration not in [e.value for e in WordDuration]:
-                    issues.append(ValidationIssue(
-                        message=f"Invalid 'word_duration' value: {word_duration}",
-                        location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid 'word_duration' value: {word_duration}",
+                            location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
+                        )
+                    )
 
             previous_word_end = word.end
-            concatenated_words += word.text + ' '
+            concatenated_words += word.text + " "
 
         if word_timing_mode == WordTimingMode.COMPLETE:
             # Remove extra whitespace for comparison
-            segment_text = ''.join(segment.text.split())
-            words_text = ''.join(concatenated_words.strip().split())
+            segment_text = "".join(segment.text.split())
+            words_text = "".join(concatenated_words.strip().split())
             if segment_text != words_text:
-                issues.append(ValidationIssue(
-                    message="Concatenated words do not match segment text",
-                    location=f"Segment[{segment_idx}] starting at {segment.start}"
-                ))
+                issues.append(
+                    ValidationIssue(
+                        message="Concatenated words do not match segment text",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
+                )
 
         return issues
 
@@ -599,15 +719,21 @@ class StandardTranscriptionJSON:
         """
         issues = []
         for idx, segment in enumerate(self.transcript.segments):
-            if segment.confidence is not None and not (0.0 <= segment.confidence <= 1.0):
-                issues.append(ValidationIssue(
-                    message=f"Segment confidence {segment.confidence} out of range [0.0, 1.0]",
-                    location=f"Segment[{idx}] starting at {segment.start}"
-                ))
+            if segment.confidence is not None and not (
+                0.0 <= segment.confidence <= 1.0
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment confidence {segment.confidence} out of range [0.0, 1.0]",
+                        location=f"Segment[{idx}] starting at {segment.start}",
+                    )
+                )
             for word_idx, word in enumerate(segment.words or []):
                 if word.confidence is not None and not (0.0 <= word.confidence <= 1.0):
-                    issues.append(ValidationIssue(
-                        message=f"Word confidence {word.confidence} out of range [0.0, 1.0]",
-                        location=f"Segment[{idx}].Word[{word_idx}] starting at {word.start}"
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Word confidence {word.confidence} out of range [0.0, 1.0]",
+                            location=f"Segment[{idx}].Word[{word_idx}] starting at {word.start}",
+                        )
+                    )
         return issues
