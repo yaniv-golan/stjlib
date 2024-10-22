@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from iso639 import Lang
+from iso639.exceptions import InvalidLanguageValue
 
 
 # Custom Exceptions and Validation Classes
@@ -321,11 +322,19 @@ class StandardTranscriptionJSON:
                 languages=source_languages if source_languages else None,
                 additional_info=source_additional_info,
             )
-        metadata_languages = (
-            [Lang(code) for code in data.get("languages", [])]
-            if data.get("languages")
-            else None
-        )
+        try:
+            metadata_languages = (
+                [Lang(code) for code in data.get("languages", [])]
+                if data.get("languages")
+                else None
+            )
+        except InvalidLanguageValue as e:
+            raise ValidationError([
+                ValidationIssue(
+                    message=f"Invalid language code: {str(e)}",
+                    location="Metadata.languages"
+                )
+            ])
         additional_info = {
             k: v
             for k, v in data.items()
@@ -737,3 +746,5 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
+
+
