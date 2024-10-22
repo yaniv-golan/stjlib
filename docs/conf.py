@@ -5,6 +5,7 @@
 
 import os
 import sys
+import sphinx_rtd_theme
 
 # Add debugging information
 print("Current working directory:", os.getcwd())
@@ -35,9 +36,10 @@ release = '0.1.0'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = [    
+extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx_rtd_theme',
 ]
 
 templates_path = ['_templates']
@@ -48,5 +50,5 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
-html_static_path = ['_static']  # Commented out if _static directory doesn't exist
+html_theme = 'sphinx_rtd_theme'
+# html_static_path = ['_static']  # Commented out if _static directory doesn't exist
