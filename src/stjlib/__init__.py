@@ -18,4 +18,3 @@ from .stj import (
 )
 
 __version__ = "0.1.0"  # Added __version__
-

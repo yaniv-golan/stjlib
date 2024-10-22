@@ -329,12 +329,14 @@ class StandardTranscriptionJSON:
                 else None
             )
         except InvalidLanguageValue as e:
-            raise ValidationError([
-                ValidationIssue(
-                    message=f"Invalid language code: {str(e)}",
-                    location="Metadata.languages"
-                )
-            ])
+            raise ValidationError(
+                [
+                    ValidationIssue(
+                        message=f"Invalid language code: {str(e)}",
+                        location="Metadata.languages",
+                    )
+                ]
+            )
         additional_info = {
             k: v
             for k, v in data.items()
@@ -746,5 +748,3 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
-
-
