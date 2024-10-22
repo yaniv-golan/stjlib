@@ -39,12 +39,32 @@ sys.path.insert(0, os.path.abspath('../..'))
 # Debugging information
 print("Python version:", sys.version)
 print(f"sphinx_rtd_theme version: {sphinx_rtd_theme.__version__}")
-print("Current working directory:", os.getcwd())
-print("Contents of current directory:", os.listdir())
-print("Python path:", sys.path)
 
 try:
     import stjlib
     print("Successfully imported stjlib")
 except ImportError as e:
     print("Failed to import stjlib:", str(e))
+
+autodoc_type_aliases = {
+    'Transcriber': 'stjlib.stj.Transcriber',
+    'Source': 'stjlib.stj.Source',
+    'Lang': 'iso639.Lang',
+}
+
+autodoc_typehints = 'description'
+
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = False
+napoleon_type_aliases = None
+napoleon_attr_annotations = True

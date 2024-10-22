@@ -1,16 +1,14 @@
 """
-stj.py
-
-A Python wrapper for the Standard Transcription JSON (STJ) format.
+Standard Transcription JSON (STJ) format wrapper.
 
 This module provides data classes and utilities for working with STJ files,
-which are used to represent transcribed audio and video data in a structured,
+which represent transcribed audio and video data in a structured,
 machine-readable JSON format.
 
-For more information about the STJ format, please refer to the STJ Specification:
+For more information about the STJ format, refer to the STJ Specification:
 https://github.com/yaniv-golan/STJ
 
-Updated to support STJ version 0.4 with improved practices.
+This implementation supports STJ version 0.4 with improved practices.
 """
 
 import json
@@ -23,7 +21,6 @@ from iso639 import Lang
 from iso639.exceptions import InvalidLanguageValue
 
 
-# Custom Exceptions and Validation Classes
 class STJError(Exception):
     """Base class for exceptions in the STJ module."""
 
@@ -31,7 +28,11 @@ class STJError(Exception):
 
 
 class ValidationError(STJError):
-    """Raised when validation fails and contains a list of validation issues."""
+    """Exception raised when validation fails.
+
+    Attributes:
+        issues (List[ValidationIssue]): List of validation issues.
+    """
 
     def __init__(self, issues: List["ValidationIssue"]):
         self.issues = issues
@@ -45,6 +46,13 @@ class ValidationError(STJError):
 
 @dataclass
 class ValidationIssue:
+    """Represents a single validation issue.
+
+    Attributes:
+        message (str): Description of the validation issue.
+        location (Optional[str]): Location where the issue occurred.
+    """
+
     message: str
     location: Optional[str] = None
 
@@ -55,26 +63,29 @@ class ValidationIssue:
             return self.message
 
 
-# Enums
 class WordTimingMode(Enum):
+    """Enumeration of word timing modes."""
+
     COMPLETE = "complete"
     PARTIAL = "partial"
     NONE = "none"
 
 
 class SegmentDuration(Enum):
+    """Enumeration of segment duration types."""
+
     ZERO = "zero"
 
 
 class WordDuration(Enum):
+    """Enumeration of word duration types."""
+
     ZERO = "zero"
 
 
-# Data Classes
 @dataclass
 class Transcriber:
-    """
-    Represents the transcriber metadata.
+    """Represents the transcriber metadata.
 
     Attributes:
         name (str): Name of the transcriber.
@@ -87,8 +98,7 @@ class Transcriber:
 
 @dataclass
 class Source:
-    """
-    Represents the source metadata.
+    """Represents the source metadata.
 
     Attributes:
         uri (Optional[str]): URI of the source file.
@@ -105,8 +115,7 @@ class Source:
 
 @dataclass
 class Metadata:
-    """
-    Represents the metadata of the STJ.
+    """Represents the metadata of the STJ.
 
     Attributes:
         transcriber (Transcriber): Transcriber information.
@@ -118,7 +127,7 @@ class Metadata:
     """
 
     transcriber: Transcriber
-    created_at: datetime  # Use datetime type
+    created_at: datetime
     source: Optional[Source] = None
     languages: Optional[List[Lang]] = None
     confidence_threshold: Optional[float] = None
@@ -127,8 +136,7 @@ class Metadata:
 
 @dataclass
 class Speaker:
-    """
-    Represents a speaker in the transcript.
+    """Represents a speaker in the transcript.
 
     Attributes:
         id (str): Unique identifier for the speaker.
@@ -143,8 +151,7 @@ class Speaker:
 
 @dataclass
 class Style:
-    """
-    Represents a style in the transcript.
+    """Represents a style in the transcript.
 
     Attributes:
         id (str): Unique identifier for the style.
@@ -229,8 +236,7 @@ class Transcript:
 
 @dataclass
 class StandardTranscriptionJSON:
-    """
-    Represents the entire STJ object.
+    """Represents the entire STJ object.
 
     Attributes:
         metadata (Metadata): Metadata of the STJ.
@@ -244,13 +250,21 @@ class StandardTranscriptionJSON:
     def from_file(
         cls, filename: str, validate: bool = False, raise_exception: bool = True
     ) -> "StandardTranscriptionJSON":
-        """
-        Load an STJ instance from a JSON file.
+        """Load an STJ instance from a JSON file.
 
-        :param filename: Path to the JSON file.
-        :param validate: If True, perform validation after loading.
-        :param raise_exception: If True and validation issues are found, raise ValidationError.
-        :return: StandardTranscriptionJSON instance.
+        Args:
+            filename (str): Path to the JSON file.
+            validate (bool): If True, perform validation after loading.
+            raise_exception (bool): If True and validation issues are found, raise ValidationError.
+
+        Returns:
+            StandardTranscriptionJSON: Loaded STJ instance.
+
+        Raises:
+            FileNotFoundError: If the specified file is not found.
+            json.JSONDecodeError: If there's an error decoding the JSON.
+            STJError: For unexpected errors during file loading.
+            ValidationError: If validation fails and raise_exception is True.
         """
         try:
             with open(filename, "r", encoding="utf-8") as f:
@@ -270,25 +284,27 @@ class StandardTranscriptionJSON:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StandardTranscriptionJSON":
-        """
-        Create an STJ instance from a dictionary.
+        """Create an STJ instance from a dictionary.
 
-        :param data: Dictionary containing STJ data.
-        :return: StandardTranscriptionJSON instance.
+        Args:
+            data (Dict[str, Any]): Dictionary containing STJ data.
+
+        Returns:
+            StandardTranscriptionJSON: Created STJ instance.
         """
-        # Deserialize metadata
         metadata = cls._deserialize_metadata(data.get("metadata", {}))
-        # Deserialize transcript
         transcript = cls._deserialize_transcript(data.get("transcript", {}))
         return cls(metadata=metadata, transcript=transcript)
 
     @staticmethod
     def _deserialize_metadata(data: Dict[str, Any]) -> Metadata:
-        """
-        Deserialize metadata from a dictionary.
+        """Deserialize metadata from a dictionary.
 
-        :param data: Dictionary containing metadata.
-        :return: Metadata instance.
+        Args:
+            data (Dict[str, Any]): Dictionary containing metadata.
+
+        Returns:
+            Metadata: Deserialized metadata object.
         """
         # Check for required fields
         if "transcriber" not in data:
@@ -360,11 +376,13 @@ class StandardTranscriptionJSON:
 
     @staticmethod
     def _deserialize_transcript(data: Dict[str, Any]) -> Transcript:
-        """
-        Deserialize transcript from a dictionary.
+        """Deserialize transcript from a dictionary.
 
-        :param data: Dictionary containing transcript data.
-        :return: Transcript instance.
+        Args:
+            data (Dict[str, Any]): Dictionary containing transcript data.
+
+        Returns:
+            Transcript: Deserialized transcript object.
         """
         speakers = []
         for s in data.get("speakers", []):
@@ -446,10 +464,13 @@ class StandardTranscriptionJSON:
         return Transcript(speakers=speakers, segments=segments, styles=styles)
 
     def to_file(self, filename: str):
-        """
-        Save the STJ instance to a JSON file.
+        """Save the STJ instance to a JSON file.
 
-        :param filename: Path to the JSON file.
+        Args:
+            filename (str): Path to the JSON file.
+
+        Raises:
+            IOError: If there's an error writing to the file.
         """
         data = self.to_dict()
         try:
@@ -459,22 +480,22 @@ class StandardTranscriptionJSON:
             raise IOError(f"Error writing to file {filename}: {e}")
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the STJ instance to a dictionary.
+        """Convert the STJ instance to a dictionary.
 
-        :return: Dictionary representation of the STJ instance.
+        Returns:
+            Dict[str, Any]: Dictionary representation of the STJ instance.
         """
         data = asdict(self)
-        # Custom serialization for specific types
-        data = self._custom_serialize(data)
-        return data
+        return self._custom_serialize(data)
 
     def _custom_serialize(self, data: Any) -> Any:
-        """
-        Recursively serialize data, handling custom types.
+        """Recursively serialize data, handling custom types.
 
-        :param data: Data to serialize.
-        :return: Serialized data.
+        Args:
+            data (Any): Data to serialize.
+
+        Returns:
+            Any: Serialized data.
         """
         if isinstance(data, dict):
             return {
@@ -494,11 +515,16 @@ class StandardTranscriptionJSON:
             return data
 
     def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
-        """
-        Perform comprehensive validation according to STJ 0.4 specification.
+        """Perform comprehensive validation according to STJ 0.4 specification.
 
-        :param raise_exception: If True and validation issues are found, raise ValidationError.
-        :return: List of ValidationIssue instances.
+        Args:
+            raise_exception (bool): If True and validation issues are found, raise ValidationError.
+
+        Returns:
+            List[ValidationIssue]: List of validation issues.
+
+        Raises:
+            ValidationError: If validation fails and raise_exception is True.
         """
         issues = []
         issues.extend(self._validate_language_codes())
@@ -512,10 +538,10 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_language_codes(self) -> List[ValidationIssue]:
-        """
-        Validate language codes in metadata and segments.
+        """Validate language codes in metadata and segments.
 
-        :return: List of ValidationIssue instances.
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
         # Validate metadata languages
@@ -551,10 +577,10 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_confidence_threshold(self) -> List[ValidationIssue]:
-        """
-        Validate confidence_threshold in metadata.
+        """Validate confidence_threshold in metadata.
 
-        :return: List of ValidationIssue instances.
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
         if self.metadata.confidence_threshold is not None:
@@ -568,13 +594,12 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_speaker_and_style_ids(self) -> List[ValidationIssue]:
-        """
-        Validate speaker_id and style_id references in segments.
+        """Validate speaker_id and style_id references in segments.
 
-        :return: List of ValidationIssue instances.
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
-        # Build sets of valid speaker and style IDs
         valid_speaker_ids = {speaker.id for speaker in self.transcript.speakers}
         valid_style_ids = (
             {style.id for style in self.transcript.styles}
@@ -582,7 +607,6 @@ class StandardTranscriptionJSON:
             else set()
         )
 
-        # Validate speaker_id and style_id in segments
         for idx, segment in enumerate(self.transcript.segments):
             if segment.speaker_id and segment.speaker_id not in valid_speaker_ids:
                 issues.append(
@@ -601,10 +625,10 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_segments(self) -> List[ValidationIssue]:
-        """
-        Validate segments for ordering, overlapping, and word consistency.
+        """Validate segments for ordering, overlapping, and word consistency.
 
-        :return: List of ValidationIssue instances.
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
         # Ensure segments are ordered and do not overlap
@@ -640,12 +664,14 @@ class StandardTranscriptionJSON:
     def _validate_words_in_segment(
         self, segment: Segment, segment_idx: int
     ) -> List[ValidationIssue]:
-        """
-        Validate words within a segment.
+        """Validate words within a segment.
 
-        :param segment: The segment containing words.
-        :param segment_idx: Index of the segment.
-        :return: List of ValidationIssue instances.
+        Args:
+            segment (Segment): The segment containing words.
+            segment_idx (int): Index of the segment.
+
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
         words = segment.words or []
@@ -723,10 +749,10 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_confidence_scores(self) -> List[ValidationIssue]:
-        """
-        Validate confidence scores in segments and words.
+        """Validate confidence scores in segments and words.
 
-        :return: List of ValidationIssue instances.
+        Returns:
+            List[ValidationIssue]: List of validation issues.
         """
         issues = []
         for idx, segment in enumerate(self.transcript.segments):
