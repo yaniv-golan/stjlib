@@ -236,7 +236,12 @@ class Transcript:
 
 @dataclass
 class StandardTranscriptionJSON:
-    """Represents the entire STJ object.
+    """
+    Represents the entire Standard Transcription JSON (STJ) object.
+
+    This class encapsulates the complete structure of an STJ file, including
+    metadata and transcript information. It provides methods for loading from
+    and saving to files, as well as comprehensive validation.
 
     Attributes:
         metadata (Metadata): Metadata of the STJ.
@@ -506,10 +511,13 @@ class StandardTranscriptionJSON:
         elif isinstance(data, list):
             return [self._custom_serialize(item) for item in data]
         elif isinstance(data, datetime):
+            # Convert datetime to ISO format in UTC
             return data.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         elif isinstance(data, Lang):
+            # Use the primary or tertiary language code
             return data.pt1 or data.pt3
         elif isinstance(data, Enum):
+            # Return the value of the Enum
             return data.value
         else:
             return data
@@ -538,10 +546,14 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_language_codes(self) -> List[ValidationIssue]:
-        """Validate language codes in metadata and segments.
+        """
+        Validate language codes in metadata and segments.
+
+        This method checks the validity of language codes in the metadata,
+        source information, and individual segments.
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to language codes.
         """
         issues = []
         # Validate metadata languages
@@ -577,10 +589,13 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_confidence_threshold(self) -> List[ValidationIssue]:
-        """Validate confidence_threshold in metadata.
+        """
+        Validate confidence_threshold in metadata.
+
+        Ensures that the confidence_threshold, if present, is within the valid range [0.0, 1.0].
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to confidence threshold.
         """
         issues = []
         if self.metadata.confidence_threshold is not None:
@@ -594,12 +609,16 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_speaker_and_style_ids(self) -> List[ValidationIssue]:
-        """Validate speaker_id and style_id references in segments.
+        """
+        Validate speaker_id and style_id references in segments.
+
+        Checks that all speaker_id and style_id values in segments refer to valid speakers and styles.
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to speaker and style IDs.
         """
         issues = []
+        # Collect valid speaker and style IDs for reference
         valid_speaker_ids = {speaker.id for speaker in self.transcript.speakers}
         valid_style_ids = (
             {style.id for style in self.transcript.styles}
@@ -625,10 +644,13 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_segments(self) -> List[ValidationIssue]:
-        """Validate segments for ordering, overlapping, and word consistency.
+        """
+        Validate segments for ordering, overlapping, and word consistency.
+
+        Checks that segments are properly ordered, do not overlap, and have consistent word information.
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to segments.
         """
         issues = []
         # Ensure segments are ordered and do not overlap
@@ -664,14 +686,17 @@ class StandardTranscriptionJSON:
     def _validate_words_in_segment(
         self, segment: Segment, segment_idx: int
     ) -> List[ValidationIssue]:
-        """Validate words within a segment.
+        """
+        Validate words within a segment.
+
+        Checks word timings, ordering, and consistency with the segment text.
 
         Args:
-            segment (Segment): The segment containing words.
-            segment_idx (int): Index of the segment.
+            segment (Segment): The segment containing words to validate.
+            segment_idx (int): Index of the segment being validated.
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to words in the segment.
         """
         issues = []
         words = segment.words or []
@@ -698,6 +723,7 @@ class StandardTranscriptionJSON:
         previous_word_end = segment.start
         concatenated_words = ""
         for word_idx, word in enumerate(words):
+            # Check if word timings are within segment timings
             if word.start < segment.start or word.end > segment.end:
                 issues.append(
                     ValidationIssue(
@@ -706,6 +732,7 @@ class StandardTranscriptionJSON:
                     )
                 )
 
+            # Ensure words do not overlap
             if word.start < previous_word_end:
                 issues.append(
                     ValidationIssue(
@@ -749,10 +776,13 @@ class StandardTranscriptionJSON:
         return issues
 
     def _validate_confidence_scores(self) -> List[ValidationIssue]:
-        """Validate confidence scores in segments and words.
+        """
+        Validate confidence scores in segments and words.
+
+        Ensures that all confidence scores are within the valid range [0.0, 1.0].
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues related to confidence scores.
         """
         issues = []
         for idx, segment in enumerate(self.transcript.segments):
@@ -774,3 +804,4 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
+

@@ -1,5 +1,12 @@
 # tests/test_stj.py
 
+"""
+Unit tests for the StandardTranscriptionJSON (STJ) implementation.
+
+This module contains comprehensive tests for the STJ format wrapper,
+including validation, serialization, and deserialization tests.
+"""
+
 import pytest
 from stjlib import (
     StandardTranscriptionJSON,
@@ -24,7 +31,12 @@ import os
 from deepdiff import DeepDiff
 
 def test_load_valid_stj():
-    """Test loading a valid STJ file."""
+    """
+    Test loading a valid STJ file.
+
+    This test creates a valid STJ dictionary and verifies that it can be
+    correctly loaded into a StandardTranscriptionJSON object.
+    """
     stj_data = {
         "metadata": {
             "transcriber": {
@@ -57,7 +69,12 @@ def test_load_valid_stj():
     assert stj.transcript.segments[0].text == "Hello world"
 
 def test_validate_valid_stj():
-    """Test validating a valid STJ instance."""
+    """
+    Test validating a valid STJ instance.
+
+    This test creates a valid STJ dictionary with various fields and
+    verifies that it passes validation without any issues.
+    """
     stj_data = {
         "metadata": {
             "transcriber": {
@@ -92,7 +109,12 @@ def test_validate_valid_stj():
     assert len(issues) == 0
 
 def test_validate_invalid_confidence():
-    """Test validation catching invalid confidence scores."""
+    """
+    Test validation catching invalid confidence scores.
+
+    This test creates an STJ with invalid confidence scores and verifies
+    that the validation process correctly identifies these issues.
+    """
     stj_data = {
         "metadata": {
             "transcriber": {
@@ -128,7 +150,7 @@ def test_validate_invalid_language_code():
                 "version": "1.0"
             },
             "created_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-            "languages": ["invalid-code"]
+            "languages": ["invalid-code"]  # Invalid language code for testing
         },
         "transcript": {
             "segments": [
@@ -136,7 +158,7 @@ def test_validate_invalid_language_code():
                     "start": 0.0,
                     "end": 5.0,
                     "text": "Test segment",
-                    "language": "invalid-code"
+                    "language": "invalid-code"  # Invalid language code in segment
                 }
             ]
         }
@@ -164,7 +186,12 @@ def test_missing_required_fields():
     assert "transcriber" in str(excinfo.value)
 
 def test_serialization():
-    """Test that serialization produces the correct dictionary."""
+    """
+    Test that serialization produces the correct dictionary.
+
+    This test creates an STJ object, serializes it to a dictionary,
+    and verifies that the resulting dictionary matches the expected structure.
+    """
     transcriber = Transcriber(name="TestTranscriber", version="1.0")
     metadata = Metadata(
         transcriber=transcriber,
@@ -215,7 +242,12 @@ def test_serialization():
     assert not diff, f"Differences found: {diff}"
 
 def test_loading_from_file(tmp_path):
-    """Test loading an STJ file from disk."""
+    """
+    Test loading an STJ file from disk.
+
+    This test creates a temporary STJ file, writes JSON data to it,
+    and then verifies that it can be correctly loaded into an STJ object.
+    """
     stj_data = {
         "metadata": {
             "transcriber": {
@@ -241,7 +273,12 @@ def test_loading_from_file(tmp_path):
     assert stj.transcript.segments[0].text == "Test segment"
 
 def test_saving_to_file(tmp_path):
-    """Test saving an STJ instance to disk."""
+    """
+    Test saving an STJ instance to disk.
+
+    This test creates an STJ object, saves it to a file, and then
+    verifies that the file contains the correct JSON data.
+    """
     transcriber = Transcriber(name="TestTranscriber", version="1.0")
     metadata = Metadata(
         transcriber=transcriber,
@@ -268,14 +305,14 @@ def test_additional_info():
         start=0.0,
         end=1.0,
         text="Hello",
-        additional_info={"word_duration": "zero"}
+        additional_info={"word_duration": "zero"}  # Additional info for zero-duration
     )
     segment = Segment(
         start=0.0,
         end=1.0,
         text="Hello",
         words=[word],
-        additional_info={"segment_duration": "zero"}
+        additional_info={"segment_duration": "zero"}  # Additional info for zero-duration
     )
     transcript = Transcript(segments=[segment])
     transcriber = Transcriber(name="TestTranscriber", version="1.0")
@@ -311,7 +348,7 @@ def test_invalid_word_timing_mode():
 
 def test_word_timings_outside_segment():
     """Test validation catching word timings outside segment timings."""
-    word = Word(start=6.0, end=7.0, text="Test")
+    word = Word(start=6.0, end=7.0, text="Test")  # Word outside segment timing
     segment = Segment(
         start=0.0,
         end=5.0,
