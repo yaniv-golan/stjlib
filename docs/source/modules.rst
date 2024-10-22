@@ -1,7 +1,7 @@
 STJLib Modules
 ==============
 
-.. automodule:: stj.stj
+.. automodule:: stjlib.stj
    :members:
    :undoc-members:
    :show-inheritance:
