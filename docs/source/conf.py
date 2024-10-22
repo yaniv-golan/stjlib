@@ -3,27 +3,6 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-import os
-import sys
-
-# Add debugging information
-print("Current working directory:", os.getcwd())
-print("Python path before:", sys.path)
-
-# Adjust the path to your source code
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, src_path)
-
-print("Added to Python path:", src_path)
-print("Python path after:", sys.path)
-
-# Try to import your module
-try:
-    import stjlib
-    print("Successfully imported stjlib")
-except ImportError as e:
-    print("Failed to import stjlib:", str(e))
-
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -49,4 +28,20 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'alabaster'
-# html_static_path = ['_static']  # Commented out if _static directory doesn't exist
+html_static_path = ['_static']
+
+import os
+import sys
+
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath('../..'))
+
+# Debugging information
+print("Current working directory:", os.getcwd())
+print("Python path:", sys.path)
+
+try:
+    import stjlib
+    print("Successfully imported stjlib")
+except ImportError as e:
+    print("Failed to import stjlib:", str(e))
