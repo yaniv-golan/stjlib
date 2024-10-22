@@ -7,4 +7,15 @@ from .stj import (
     ValidationIssue,
     WordTimingMode,
     SegmentDuration,
-    WordDuration)
+    WordDuration,
+    Transcriber,
+    Metadata,
+    Transcript,
+    Segment,
+    Word,
+    Speaker,
+    Style,
+)
+
+__version__ = "0.1.0"  # Added __version__
+
