@@ -766,7 +766,7 @@ class StandardTranscriptionJSON:
         3. Speaker and style ID references
         4. Segment ordering and overlap
         5. Word timing and content consistency
-        
+
         Args:
             raise_exception: If True, raises ValidationError when issues are found.
                 If False, returns a list of validation issues.
@@ -1061,10 +1061,3 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
-
-
-
-
-
-
-
