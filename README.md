@@ -1,7 +1,8 @@
 # STJLib
 
 [![PyPI](https://img.shields.io/pypi/v/stjlib)](https://pypi.org/project/stjlib/)
-[![Build Status](https://github.com/yourusername/stjlib/actions/workflows/python-package.yml/badge.svg)](https://github.com/yourusername/stjlib/actions)
+[![Build Status](https://github.com/yaniv-golan/stjlib/actions/workflows/python-package.yml/badge.svg)](https://github.com/yaniv-golan/stjlib/actions)
+[![Documentation Status](https://readthedocs.org/projects/stjlib/badge.svg?version=latest)](https://stjlib.readthedocs.io/en/latest/?badge=latest)
 
 A Python library for the Standard Transcription JSON (STJ) format.
 
@@ -11,96 +12,88 @@ A Python library for the Standard Transcription JSON (STJ) format.
 
 For more information about the STJ format, please refer to the [STJ Specification](https://github.com/yaniv-golan/STJ).
 
+## Documentation
+
+Full documentation is available at [stjlib.readthedocs.io](https://stjlib.readthedocs.io/). This includes:
+
+- Detailed API reference
+- Usage examples
+- Advanced usage guides
+- Contributing guidelines
+
 ## Features
 
-- Load and save STJ files.
-- Validate STJ data according to the specification.
-- Access and manipulate metadata and transcript data.
-- Flexible error handling and validation reporting.
+- Load and save STJ files
+- Validate STJ data according to the specification
+- Access and manipulate metadata and transcript data
+- Flexible error handling and validation reporting
 
-## Installation
+## Quick Start
 
-You can install **STJLib** from PyPI:
+### Installation
 
 ```bash
 pip install stjlib
 ```
 
-## Usage
-
-### Loading an STJ File
+### Basic Usage
 
 ```python
 from stjlib import StandardTranscriptionJSON
 
-# Load an STJ file without validation
-stj = StandardTranscriptionJSON.from_file('path/to/your_file.stj.json')
-
-# Perform validation when ready
-issues = stj.validate(raise_exception=False)
-if issues:
-    print("Validation issues found:")
-    for issue in issues:
-        print(issue)
-else:
-    print("Validation succeeded.")
+# Load and validate an STJ file
+stj = StandardTranscriptionJSON.from_file('path/to/file.stj.json', validate=True)
 
 # Access metadata and transcript data
 print(stj.metadata)
 print(stj.transcript)
 
-# Save the STJ data back to a file
-stj.to_file('path/to/output_file.stj.json')
+# Save modified data back to a file
+stj.to_file('path/to/output.stj.json')
 ```
 
-### Handling Validation Issues
+For more examples and detailed usage instructions, please refer to our [documentation](https://stjlib.readthedocs.io/).
 
-```python
-from stjlib import ValidationError
+## Development
 
-try:
-    # Load and validate the STJ file
-    stj = StandardTranscriptionJSON.from_file('path/to/your_file.stj.json', validate=True)
-except ValidationError as e:
-    print("Validation failed:")
-    print(e)
-    # Access the list of issues
-    for issue in e.issues:
-        print(issue)
-else:
-    print("File loaded and validated successfully.")
-```
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/YourFeature`).
-3. Commit your changes (`git commit -am 'Add some feature'`).
-4. Push to the branch (`git push origin feature/YourFeature`).
-5. Open a Pull Request.
-
-## Running Tests
-
-We use `pytest` for testing. To run tests:
+### Setting Up Development Environment
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/stjlib.git
+cd stjlib
+
+# Install development dependencies
 pip install -e .
 pip install -r requirements-dev.txt
+```
+
+### Running Tests
+
+```bash
 pytest
 ```
 
-## Building Documentation
-
-Documentation is generated using Sphinx. To build the documentation:
+### Building Documentation Locally
 
 ```bash
 cd docs
 make html
 ```
 
-The documentation will be available in `docs/_build/html`.
+The documentation will be available in `docs/build/html`.
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Check for open issues or open a new issue to start a discussion
+2. Fork the repository and create a new branch: `git checkout -b feature/your-feature-name`
+3. Write your code and tests
+4. Ensure all tests pass: `pytest`
+5. Submit a Pull Request
+
+For more detailed guidelines, see our [Contributing Guide](https://stjlib.readthedocs.io/en/latest/contributing.html).
 
 ## License
 
@@ -108,4 +101,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-For questions or comments, please open an issue on GitHub.
+- For bugs and feature requests, please [open an issue](https://github.com/yourusername/stjlib/issues)
+- For other questions, start a [GitHub Discussion](https://github.com/yourusername/stjlib/discussions)
