@@ -1,20 +1,44 @@
-.. STJLib documentation master file, created by
-   sphinx-quickstart on Tue Oct 22 02:22:09 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Welcome to STJLib's Documentation
+=================================
 
-Welcome to STJLib's documentation!
-==================================
+**STJLib** is a Python library for working with Standard Transcription JSON (STJ) format files.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   installation
+   usage
+   api
+   advanced
    modules
 
-Indices and tables
-==================
+Features
+--------
+* Load and save STJ files
+* Validate STJ data according to specification
+* Access and manipulate metadata and transcript data
+* Flexible error handling and validation reporting
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+Quick Start
+-----------
+Install STJLib:
+
+.. code-block:: bash
+
+   pip install stjlib
+
+Basic usage:
+
+.. code-block:: python
+
+   from stjlib import StandardTranscriptionJSON
+
+   # Load an STJ file
+   stj = StandardTranscriptionJSON.from_file('path/to/file.stj.json')
+
+   # Access metadata and transcript
+   print(stj.metadata)
+   print(stj.transcript)
+
+For more detailed information, check out the :doc:`usage` guide.
