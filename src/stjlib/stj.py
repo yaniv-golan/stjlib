@@ -804,4 +804,3 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
-
