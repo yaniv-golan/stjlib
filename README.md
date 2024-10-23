@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/stjlib)](https://pypi.org/project/stjlib/)
 [![Build Status](https://github.com/yaniv-golan/stjlib/actions/workflows/python-package.yml/badge.svg)](https://github.com/yaniv-golan/stjlib/actions)
-[![Documentation Status](https://readthedocs.org/projects/stjlib/badge/?version=latest)](https://stjlib.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/stjlib/badge/?version=latest)](https://stjlib.readthedocs.io/latest/?badge=latest)
 
 
 A Python library for the Standard Transcription JSON (STJ) format.
