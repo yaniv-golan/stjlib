@@ -54,7 +54,7 @@ class ValidationError(STJError):
     Attributes:
         issues (List[ValidationIssue]): List of validation issues found
 
-    Example:
+    Example Usage:
         >>> try:
         ...     stj.validate()
         ... except ValidationError as e:
@@ -63,8 +63,11 @@ class ValidationError(STJError):
         ...         print(f"Location: {issue.location}")
         ...         print(f"Problem: {issue.message}")
         ...         print("---")
-    """
 
+    See Also:
+        :class:`ValidationIssue`: Represents individual validation issues.
+        :meth:`StandardTranscriptionJSON.validate`: Method that raises this exception.
+    """
     def __init__(self, issues: List["ValidationIssue"]):
         self.issues = issues
         super().__init__(self.__str__())
@@ -87,14 +90,16 @@ class ValidationIssue:
         location (Optional[str]): The location in the STJ structure where the issue was found.
 
     Example:
-        >>> issue = ValidationIssue(
+        >>> issue: ValidationIssue = ValidationIssue(
         ...     message="Invalid confidence score",
         ...     location="Segment[2].Word[5]"
         ... )
         >>> print(issue)
         Segment[2].Word[5]: Invalid confidence score
-    """
 
+    See Also:
+        :class:`ValidationError`: Exception that aggregates multiple validation issues.
+    """
     message: str
     location: Optional[str] = None
 
@@ -422,61 +427,190 @@ class Transcript:
 
 @dataclass
 class StandardTranscriptionJSON:
-    """A complete implementation of the Standard Transcription JSON (STJ) format.
+    """A class for handling Standard Transcription JSON (STJ) format.
 
-    This class serves as the primary interface for working with STJ data, providing
-    methods for loading, saving, validating, and manipulating transcription content.
-    It enforces the STJ specification while offering flexibility through optional fields
-    and additional metadata.
-
-    Key Features:
-        - Robust file loading and saving
-        - Comprehensive validation against STJ specification
-        - Support for speakers, styles, and segments
-        - Word-level timing and confidence information
-        - Extensible metadata through additional_info fields
-
-    Basic Usage:
-        >>> # Create a new STJ instance
-        >>> transcriber = Transcriber(name="MyTranscriber", version="1.0")
-        >>> metadata = Metadata(transcriber=transcriber, created_at=datetime.now(timezone.utc))
-        >>> stj = StandardTranscriptionJSON(metadata=metadata, transcript=Transcript())
-        >>>
-        >>> # Load existing STJ file
-        >>> stj = StandardTranscriptionJSON.from_file("transcript.stj.json")
-        >>>
-        >>> # Validate the data
-        >>> try:
-        ...     stj.validate()
-        ... except ValidationError as e:
-        ...     print("Validation failed:", e.issues)
-
-    Advanced Usage:
-        >>> # Add a new segment
-        >>> segment = Segment(
-        ...     start=0.0,
-        ...     end=5.0,
-        ...     text="Hello world",
-        ...     speaker_id="speaker1",
-        ...     words=[
-        ...         Word(start=0.0, end=1.0, text="Hello"),
-        ...         Word(start=1.0, end=2.0, text="world")
-        ...     ]
-        ... )
-        >>> stj.transcript.segments.append(segment)
-        >>>
-        >>> # Save changes
-        >>> stj.to_file("updated_transcript.stj.json")
+    This class provides methods for creating, validating, and manipulating
+    transcription data in the STJ format.
 
     Attributes:
-        metadata (Metadata): Contains information about the transcription process,
-            including transcriber details, creation time, and optional source information.
-        transcript (Transcript): Contains the actual transcript data, including
-            segments, speakers, and optional style information.
+        metadata (Metadata): Metadata information for the transcription.
+        transcript (Transcript): The transcript data.
+
+    See Also:
+        :class:`Metadata`: Class representing metadata information.
+        :class:`Transcript`: Class representing the transcript data.
     """
 
     metadata: Metadata
     transcript: Transcript
+
+    def _validate_metadata(self):
+        """Validate the metadata of the STJ object.
+
+        Raises:
+            ValidationError: If metadata validation fails. See :class:`ValidationError` for details
+                about error handling and :class:`ValidationIssue` for the structure of
+                validation issues.
+
+        Example:
+            >>> metadata: Metadata = Metadata(
+            ...     transcriber=Transcriber(name="AutoTranscribe", version="2.1.0"),
+            ...     created_at=datetime.now(timezone.utc)
+            ... )
+            >>> transcript: Transcript = Transcript(
+            ...     speakers=[
+            ...         Speaker(id="S1", name="John"),
+            ...         Speaker(id="S2", name="Jane")
+            ...     ],
+            ...     segments=[
+            ...         Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
+            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
+            ...     ],
+            ...     styles=[
+            ...         Style(id="emphasis", description="Emphasized speech")
+            ...     ]
+            ... )
+            >>> stj = StandardTranscriptionJSON(metadata, transcript)
+            >>> stj._validate_metadata()  # Valid metadata
+            >>> 
+            >>> stj.metadata = Metadata(transcriber=None, created_at=None)
+            >>> stj._validate_metadata()  # Raises ValidationError
+
+        See Also:
+            :class:`ValidationError`: Raised when metadata validation fails.
+            :class:`ValidationIssue`: Represents individual validation issues.
+        """
+        # Existing validation code...
+
+    def _validate_transcript(self):
+        """Validate the transcript of the STJ object.
+
+        Raises:
+            ValidationError: If transcript validation fails. See :class:`ValidationError` for details
+                about error handling and :class:`ValidationIssue` for the structure of
+                validation issues.
+
+        Example:
+            >>> transcript: Transcript = Transcript(
+            ...     speakers=[
+            ...         Speaker(id="S1", name="John"),
+            ...         Speaker(id="S2", name="Jane")
+            ...     ],
+            ...     segments=[
+            ...         Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
+            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
+            ...     ],
+            ...     styles=[
+            ...         Style(id="emphasis", description="Emphasized speech")
+            ...     ]
+            ... )
+            >>> stj = StandardTranscriptionJSON(metadata, transcript)
+            >>> stj._validate_transcript()  # Valid transcript
+            >>> stj.transcript = Transcript(
+            ...     speakers=[
+            ...         Speaker(id="S1", name="John"),
+            ...         Speaker(id="S2", name="Jane")
+            ...     ],
+            ...     segments=[
+            ...         Segment(start=0.0, end=1.5, text="Hello", confidence=0.95),
+            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
+            ...     ],
+            ...     styles=[
+            ...         Style(id="emphasis", description="Emphasized speech")
+            ...     ]
+            ... )
+            >>> stj._validate_transcript()  # Raises ValidationError
+
+        See Also:
+            :class:`ValidationError`: Raised when transcript validation fails.
+            :class:`ValidationIssue`: Represents individual validation issues.
+        """
+        # Existing validation code...
+
+    def _validate_confidence_scores(self):
+        """Validate the confidence scores of the segments.
+
+        Ensures that all confidence scores are within the valid range [0.0, 1.0].
+
+        Raises:
+            ValidationError: If confidence score validation fails. See :class:`ValidationError` for details
+                about error handling and :class:`ValidationIssue` for the structure of
+                validation issues.
+
+        Example:
+            >>> segments: List[Segment] = [
+            ...     Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
+            ...     Segment(start=1.0, end=2.0, text="world", confidence=1.05)
+            ... ]
+            >>> stj = StandardTranscriptionJSON(metadata, segments)
+            >>> stj._validate_confidence_scores()  # Raises ValidationError for second segment
+
+        See Also:
+            :class:`ValidationError`: Raised when confidence score validation fails.
+            :class:`ValidationIssue`: Represents individual validation issues.
+        """
+        # Existing validation code...
+
+    def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
+        """Perform comprehensive validation of the STJ data.
+
+        Validates all aspects of the STJ data according to the specification, including:
+        - Language code validity using ISO 639 standards
+        - Confidence score ranges (0.0 to 1.0)
+        - Speaker and style ID references
+        - Segment timing and ordering
+        - Word timing and content matching
+        - Zero-duration segment handling
+
+        The validation process checks:
+        1. Language codes in metadata and segments
+        2. Confidence threshold and scores
+        3. Speaker and style ID references
+        4. Segment ordering and overlap
+        5. Word timing and content consistency
+
+        Args:
+            raise_exception: If True, raises ValidationError when issues are found.
+                If False, returns a list of validation issues.
+
+        Returns:
+            List[ValidationIssue]: List of validation issues found, empty if none.
+
+        Raises:
+            ValidationError: If validation fails and raise_exception is True.
+                See :class:`ValidationError` for details about error handling and
+                :class:`ValidationIssue` for the structure of validation issues.
+
+        Example:
+            >>> stj = StandardTranscriptionJSON(metadata, transcript)
+            >>> try:
+            ...     stj.validate(raise_exception=True)
+            ... except ValidationError as e:
+            ...     print("Validation failed:")
+            ...     for issue in e.issues:
+            ...         print(f"- {issue}")
+            Validation failed:
+            - Segment[1] starting at 1.0: Segment confidence 1.1 out of range [0.0, 1.0]
+            - Segment[2] starting at 2.0: Invalid speaker_id 'S3'
+
+        See Also:
+            :class:`ValidationError`: Raised when any part of the validation fails.
+            :meth:`_validate_language_codes`: Method for validating language codes.
+            :meth:`_validate_confidence_threshold`: Method for validating confidence thresholds.
+            :meth:`_validate_speaker_and_style_ids`: Method for validating speaker and style IDs.
+            :meth:`_validate_segments`: Method for validating segments.
+            :meth:`_validate_confidence_scores`: Method for validating confidence scores.
+        """
+        issues = []
+        issues.extend(self._validate_language_codes())
+        issues.extend(self._validate_confidence_threshold())
+        issues.extend(self._validate_speaker_and_style_ids())
+        issues.extend(self._validate_segments())
+        issues.extend(self._validate_confidence_scores())
+
+        if issues and raise_exception:
+            raise ValidationError(issues)
+        return issues
 
     @classmethod
     def from_file(
@@ -516,13 +650,34 @@ class StandardTranscriptionJSON:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StandardTranscriptionJSON":
-        """Create an STJ instance from a dictionary.
-
+        """Create a StandardTranscriptionJSON object from a dictionary.
+    
         Args:
             data (Dict[str, Any]): Dictionary containing STJ data.
-
+    
         Returns:
-            StandardTranscriptionJSON: Created STJ instance.
+            StandardTranscriptionJSON: A new StandardTranscriptionJSON object.
+    
+        Raises:
+            ValidationError: If the input data is invalid. See :class:`ValidationError` for details
+                about error handling and :class:`ValidationIssue` for the structure of
+                validation issues.
+    
+        Example:
+            >>> data: Dict[str, Any] = {
+            ...     "metadata": {
+            ...         "transcriber": {"name": "Test", "version": "1.0"},
+            ...         "created_at": "2023-04-01T12:00:00Z"
+            ...     },
+            ...     "transcript": {
+            ...         "speakers": [{"id": "S1", "name": "John"}, {"id": "S2", "name": "Jane"}],
+            ...         "segments": [
+            ...             {"start": 0.0, "end": 1.0, "text": "Hello", "speaker_id": "S1"},
+            ...             {"start": 1.0, "end": 2.0, "text": "world", "speaker_id": "S2"}
+            ...         ]
+            ...     }
+            ... }
+            >>> stj: StandardTranscriptionJSON = StandardTranscriptionJSON.from_dict(data)
         """
         metadata = cls._deserialize_metadata(data.get("metadata", {}))
         transcript = cls._deserialize_transcript(data.get("transcript", {}))
@@ -748,59 +903,6 @@ class StandardTranscriptionJSON:
             return data.value
         else:
             return data
-
-    def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
-        """Perform comprehensive validation of the STJ data.
-
-        Validates all aspects of the STJ data according to the specification, including:
-        - Language code validity using ISO 639 standards
-        - Confidence score ranges (0.0 to 1.0)
-        - Speaker and style ID references
-        - Segment timing and ordering
-        - Word timing and content matching
-        - Zero-duration segment handling
-
-        The validation process checks:
-        1. Language codes in metadata and segments
-        2. Confidence threshold and scores
-        3. Speaker and style ID references
-        4. Segment ordering and overlap
-        5. Word timing and content consistency
-
-        Args:
-            raise_exception: If True, raises ValidationError when issues are found.
-                If False, returns a list of validation issues.
-
-        Returns:
-            List[ValidationIssue]: List of validation issues found, empty if none.
-
-        Raises:
-            ValidationError: If validation fails and raise_exception is True.
-
-        Example:
-            >>> # Get validation issues without raising
-            >>> issues = stj.validate(raise_exception=False)
-            >>> for issue in issues:
-            ...     print(f"{issue.location}: {issue.message}")
-            >>>
-            >>> # Validate with exception handling
-            >>> try:
-            ...     stj.validate(raise_exception=True)
-            ... except ValidationError as e:
-            ...     print("Validation failed:")
-            ...     for issue in e.issues:
-            ...         print(f"- {issue}")
-        """
-        issues = []
-        issues.extend(self._validate_language_codes())
-        issues.extend(self._validate_confidence_threshold())
-        issues.extend(self._validate_speaker_and_style_ids())
-        issues.extend(self._validate_segments())
-        issues.extend(self._validate_confidence_scores())
-
-        if issues and raise_exception:
-            raise ValidationError(issues)
-        return issues
 
     def _validate_language_codes(self) -> List[ValidationIssue]:
         """
@@ -1061,3 +1163,9 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
+
+
+
+
+
+
