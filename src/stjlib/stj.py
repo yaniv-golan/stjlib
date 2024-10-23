@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 
 from iso639 import Lang
 from iso639.exceptions import InvalidLanguageValue
+from dateutil.parser import parse as parse_datetime
 
 
 class STJError(Exception):
@@ -529,30 +530,6 @@ class StandardTranscriptionJSON:
         """
         # Existing validation code...
 
-    def _validate_confidence_scores(self):
-        """Validate the confidence scores of the segments.
-
-        Ensures that all confidence scores are within the valid range [0.0, 1.0].
-
-        Raises:
-            ValidationError: If confidence score validation fails. See :class:`ValidationError` for details
-                about error handling and :class:`ValidationIssue` for the structure of
-                validation issues.
-
-        Example:
-            >>> segments: List[Segment] = [
-            ...     Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
-            ...     Segment(start=1.0, end=2.0, text="world", confidence=1.05)
-            ... ]
-            >>> stj = StandardTranscriptionJSON(metadata, segments)
-            >>> stj._validate_confidence_scores()  # Raises ValidationError for second segment
-
-        See Also:
-            :class:`ValidationError`: Raised when confidence score validation fails.
-            :class:`ValidationIssue`: Represents individual validation issues.
-        """
-        # Existing validation code...
-
     def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
         """Perform comprehensive validation of the STJ data.
 
@@ -651,42 +628,28 @@ class StandardTranscriptionJSON:
             ) from e
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StandardTranscriptionJSON":
+    def from_dict(cls, data: Dict[str, Any], validate: bool = True) -> "StandardTranscriptionJSON":
         """Create a StandardTranscriptionJSON object from a dictionary.
 
         Args:
             data (Dict[str, Any]): Dictionary containing STJ data.
+            validate (bool): If True, validate the data after deserialization.
 
         Returns:
             StandardTranscriptionJSON: A new StandardTranscriptionJSON object.
 
         Raises:
-            ValidationError: If the input data is invalid. See :class:`ValidationError` for details
-                about error handling and :class:`ValidationIssue` for the structure of
-                validation issues.
-
-        Example:
-            >>> data: Dict[str, Any] = {
-            ...     "metadata": {
-            ...         "transcriber": {"name": "Test", "version": "1.0"},
-            ...         "created_at": "2023-04-01T12:00:00Z"
-            ...     },
-            ...     "transcript": {
-            ...         "speakers": [{"id": "S1", "name": "John"}, {"id": "S2", "name": "Jane"}],
-            ...         "segments": [
-            ...             {"start": 0.0, "end": 1.0, "text": "Hello", "speaker_id": "S1"},
-            ...             {"start": 1.0, "end": 2.0, "text": "world", "speaker_id": "S2"}
-            ...         ]
-            ...     }
-            ... }
-            >>> stj: StandardTranscriptionJSON = StandardTranscriptionJSON.from_dict(data)
+            ValidationError: If validate=True and the input data is invalid.
         """
         metadata = cls._deserialize_metadata(data.get("metadata", {}))
         transcript = cls._deserialize_transcript(data.get("transcript", {}))
-        return cls(metadata=metadata, transcript=transcript)
+        stj = cls(metadata=metadata, transcript=transcript)
+        if validate:
+            stj.validate(raise_exception=True)
+        return stj
 
-    @staticmethod
-    def _deserialize_metadata(data: Dict[str, Any]) -> Metadata:
+    @classmethod
+    def _deserialize_metadata(cls, data: Dict[str, Any]) -> Metadata:
         """Deserialize metadata from a dictionary.
 
         Args:
@@ -704,11 +667,7 @@ class StandardTranscriptionJSON:
         transcriber_data = data.get("transcriber", {})
         transcriber = Transcriber(**transcriber_data)
         created_at_str = data.get("created_at")
-        created_at = (
-            datetime.fromisoformat(created_at_str.rstrip("Z"))
-            if created_at_str
-            else datetime.now(timezone.utc)
-        )
+        created_at = parse_datetime(created_at_str) if created_at_str else datetime.now(timezone.utc)
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
 
@@ -763,69 +722,78 @@ class StandardTranscriptionJSON:
             additional_info=additional_info,
         )
 
-    @staticmethod
-    def _deserialize_transcript(data: Dict[str, Any]) -> Transcript:
-        """Deserialize transcript from a dictionary.
+    @classmethod
+    def _deserialize_transcript(cls, s: dict) -> Transcript:
+        """
+        Deserialize transcript from a dictionary.
 
         Args:
-            data (Dict[str, Any]): Dictionary containing transcript data.
+            s (dict): Dictionary containing transcript data.
 
         Returns:
             Transcript: Deserialized transcript object.
         """
         speakers = []
-        for s in data.get("speakers", []):
-            additional_info = {k: v for k, v in s.items() if k not in {"id", "name"}}
+        for speaker_data in s.get("speakers", []):
+            additional_info = {k: v for k, v in speaker_data.items() if k not in {"id", "name"}}
             speaker = Speaker(
-                id=s["id"], name=s.get("name"), additional_info=additional_info
+                id=speaker_data["id"],
+                name=speaker_data.get("name"),
+                additional_info=additional_info
             )
             speakers.append(speaker)
 
         styles = []
-        for s in data.get("styles", []):
+        for style_data in s.get("styles", []):
             additional_info = {
-                k: v
-                for k, v in s.items()
+                k: v for k, v in style_data.items()
                 if k not in {"id", "description", "formatting", "positioning"}
             }
             style = Style(
-                id=s["id"],
-                description=s.get("description"),
-                formatting=s.get("formatting"),
-                positioning=s.get("positioning"),
+                id=style_data["id"],
+                description=style_data.get("description"),
+                formatting=style_data.get("formatting"),
+                positioning=style_data.get("positioning"),
                 additional_info=additional_info,
             )
             styles.append(style)
         styles = styles if styles else None
 
         segments = []
-        for s in data.get("segments", []):
+        for segment_data in s.get("segments", []):
             words = []
-            for w in s.get("words", []):
+            for word_data in segment_data.get("words", []):
                 word_additional_info = {
-                    k: v
-                    for k, v in w.items()
+                    k: v for k, v in word_data.items()
                     if k not in {"start", "end", "text", "confidence"}
                 }
                 word = Word(
-                    start=w["start"],
-                    end=w["end"],
-                    text=w["text"],
-                    confidence=w.get("confidence"),
+                    start=word_data["start"],
+                    end=word_data["end"],
+                    text=word_data["text"],
+                    confidence=word_data.get("confidence"),
                     additional_info=word_additional_info,
                 )
                 words.append(word)
             words = words if words else None
 
-            language = Lang(s["language"]) if s.get("language") else None
-            word_timing_mode = s.get("word_timing_mode")
+            try:
+                language = Lang(segment_data["language"]) if segment_data.get("language") else None
+            except InvalidLanguageValue:
+                language = None  # Handle invalid language code
+
+            # Handle word_timing_mode
+            word_timing_mode = segment_data.get("word_timing_mode")
             if word_timing_mode:
-                word_timing_mode = WordTimingMode(word_timing_mode)
+                try:
+                    word_timing_mode = WordTimingMode(word_timing_mode)
+                except ValueError:
+                    # Keep the invalid value for validation to catch
+                    pass
+
             segment_additional_info = {
-                k: v
-                for k, v in s.items()
-                if k
-                not in {
+                k: v for k, v in segment_data.items()
+                if k not in {
                     "start",
                     "end",
                     "text",
@@ -838,13 +806,13 @@ class StandardTranscriptionJSON:
                 }
             }
             segment = Segment(
-                start=s["start"],
-                end=s["end"],
-                text=s["text"],
-                speaker_id=s.get("speaker_id"),
-                confidence=s.get("confidence"),
+                start=segment_data["start"],
+                end=segment_data["end"],
+                text=segment_data["text"],
+                speaker_id=segment_data.get("speaker_id"),
+                confidence=segment_data.get("confidence"),
                 language=language,
-                style_id=s.get("style_id"),
+                style_id=segment_data.get("style_id"),
                 words=words,
                 word_timing_mode=word_timing_mode,
                 additional_info=segment_additional_info,
@@ -1040,6 +1008,20 @@ class StandardTranscriptionJSON:
                             location=f"Segment[{idx}] starting at {segment.start}",
                         )
                     )
+            # Validate word timing mode
+            word_timing_mode = segment.word_timing_mode
+            if word_timing_mode is not None:
+                if not isinstance(word_timing_mode, WordTimingMode):
+                    try:
+                        # Try to convert string to enum
+                        WordTimingMode(word_timing_mode)
+                    except ValueError:
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid word_timing_mode '{word_timing_mode}'",
+                                location=f"Segment[{idx}] starting at {segment.start}",
+                            )
+                        )
             issues.extend(self._validate_words_in_segment(segment, idx))
             previous_end = segment.end
         return issues
@@ -1061,17 +1043,23 @@ class StandardTranscriptionJSON:
         """
         issues = []
         words = segment.words or []
-        word_timing_mode = segment.word_timing_mode or (
-            WordTimingMode.COMPLETE if words else WordTimingMode.NONE
-        )
+        word_timing_mode = segment.word_timing_mode
 
-        if word_timing_mode not in WordTimingMode:
-            issues.append(
-                ValidationIssue(
-                    message="Invalid 'word_timing_mode'",
-                    location=f"Segment[{segment_idx}] starting at {segment.start}",
+        # Validate word timing mode
+        if word_timing_mode is not None:
+            if not isinstance(word_timing_mode, WordTimingMode):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid word_timing_mode '{word_timing_mode}'",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
                 )
-            )
+                # Don't continue validation if word_timing_mode is invalid
+                return issues
+
+        # Set default word_timing_mode if none provided
+        if word_timing_mode is None:
+            word_timing_mode = WordTimingMode.COMPLETE if words else WordTimingMode.NONE
 
         if word_timing_mode != WordTimingMode.NONE and not words:
             issues.append(
@@ -1165,3 +1153,21 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

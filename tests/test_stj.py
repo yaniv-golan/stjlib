@@ -135,11 +135,17 @@ def test_validate_invalid_confidence():
             ]
         }
     }
-    stj = StandardTranscriptionJSON.from_dict(stj_data)
-    issues = stj.validate(raise_exception=False)
-    assert len(issues) == 2
-    assert any("confidence_threshold" in issue.location for issue in issues)
-    assert any("Segment[0]" in issue.location for issue in issues)
+    # Create the object without validation
+    stj = StandardTranscriptionJSON.from_dict(stj_data, validate=False)
+    
+    # Then validate and check the issues
+    with pytest.raises(ValidationError) as exc_info:
+        stj.validate()
+    
+    # Verify both validation issues are present in the error message
+    error_message = str(exc_info.value)
+    assert "confidence_threshold 1.5 out of range" in error_message
+    assert "Segment confidence -0.1 out of range" in error_message
 
 def test_validate_invalid_language_code():
     """Test validation catching invalid language codes."""
@@ -340,11 +346,10 @@ def test_invalid_word_timing_mode():
         }
     }
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         stj = StandardTranscriptionJSON.from_dict(stj_data)
-        stj.validate()
-
-    assert "invalid_mode" in str(exc_info.value)
+    
+    assert "Invalid word_timing_mode" in str(exc_info.value)
 
 def test_word_timings_outside_segment():
     """Test validation catching word timings outside segment timings."""
@@ -517,4 +522,8 @@ def test_word_overlap():
     issues = stj.validate(raise_exception=False)
     assert len(issues) == 1
     assert "Words overlap or are out of order" in issues[0].message
+
+
+
+
 
