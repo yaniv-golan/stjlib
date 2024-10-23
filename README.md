@@ -4,7 +4,6 @@
 [![Build Status](https://github.com/yaniv-golan/stjlib/actions/workflows/python-package.yml/badge.svg)](https://github.com/yaniv-golan/stjlib/actions)
 [![Documentation Status](https://readthedocs.org/projects/stjlib/badge/?version=latest)](https://stjlib.readthedocs.io/latest/?badge=latest)
 
-
 A Python library for the Standard Transcription JSON (STJ) format.
 
 ## Overview
@@ -86,15 +85,7 @@ The documentation will be available in `docs/build/html`.
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
-
-1. Check for open issues or open a new issue to start a discussion
-2. Fork the repository and create a new branch: `git checkout -b feature/your-feature-name`
-3. Write your code and tests
-4. Ensure all tests pass: `pytest`
-5. Submit a Pull Request
-
-For more detailed guidelines, see our [Contributing Guide](https://stjlib.readthedocs.io/en/latest/contributing.html).
+We welcome contributions to stjlib! Please see our [Contributing Guide](CONTRIBUTING.md) for more details on how to get started.
 
 ## License
 

@@ -1,14 +1,30 @@
 """
-Standard Transcription JSON (STJ) format wrapper.
+STJLib: Standard Transcription JSON Format Handler
 
-This module provides data classes and utilities for working with STJ files,
-which represent transcribed audio and video data in a structured,
-machine-readable JSON format.
+This module provides a comprehensive implementation of the Standard Transcription JSON (STJ) format,
+which is used to represent transcribed audio and video data in a structured, machine-readable format.
 
-For more information about the STJ format, refer to the STJ Specification:
+Key Features:
+    - Load and save STJ files with robust error handling
+    - Validate STJ data against the official specification
+    - Access and modify transcript content, metadata, and speaker information
+    - Full support for word-level timing and confidence scores
+    - Extensible through additional_info fields
+
+Example Usage:
+    >>> from stjlib import StandardTranscriptionJSON
+    >>> 
+    >>> # Load and validate an STJ file
+    >>> stj = StandardTranscriptionJSON.from_file('transcript.stj.json', validate=True)
+    >>> 
+    >>> # Access transcript data
+    >>> for segment in stj.transcript.segments:
+    ...     print(f"{segment.start:.2f}-{segment.end:.2f}: {segment.text}")
+
+For detailed information about the STJ format, see:
 https://github.com/yaniv-golan/STJ
 
-This implementation supports STJ version 0.4 with improved practices.
+Version: 0.2.0
 """
 
 import json
@@ -28,10 +44,25 @@ class STJError(Exception):
 
 
 class ValidationError(STJError):
-    """Exception raised when validation fails.
+    """Exception raised when STJ validation fails.
+
+    This exception contains a list of specific validation issues, allowing
+    the caller to understand exactly what problems were found in the STJ data.
+    Each issue includes both a descriptive message and a location indicating
+    where in the STJ structure the problem was found.
 
     Attributes:
-        issues (List[ValidationIssue]): List of validation issues.
+        issues (List[ValidationIssue]): List of validation issues found
+
+    Example:
+        >>> try:
+        ...     stj.validate()
+        ... except ValidationError as e:
+        ...     print("Validation failed:")
+        ...     for issue in e.issues:
+        ...         print(f"Location: {issue.location}")
+        ...         print(f"Problem: {issue.message}")
+        ...         print("---")
     """
 
     def __init__(self, issues: List["ValidationIssue"]):
@@ -46,11 +77,22 @@ class ValidationError(STJError):
 
 @dataclass
 class ValidationIssue:
-    """Represents a single validation issue.
+    """Represents a single validation issue found during STJ data validation.
+
+    This class is used to provide detailed information about specific validation
+    problems, including a description of the issue and its location in the STJ structure.
 
     Attributes:
-        message (str): Description of the validation issue.
-        location (Optional[str]): Location where the issue occurred.
+        message (str): A descriptive message explaining the validation issue.
+        location (Optional[str]): The location in the STJ structure where the issue was found.
+
+    Example:
+        >>> issue = ValidationIssue(
+        ...     message="Invalid confidence score",
+        ...     location="Segment[2].Word[5]"
+        ... )
+        >>> print(issue)
+        Segment[2].Word[5]: Invalid confidence score
     """
 
     message: str
@@ -64,7 +106,20 @@ class ValidationIssue:
 
 
 class WordTimingMode(Enum):
-    """Enumeration of word timing modes."""
+    """Enumeration of word timing modes in a transcript segment.
+
+    This enum defines the possible modes for word-level timing information:
+    - COMPLETE: All words have timing information.
+    - PARTIAL: Some words have timing information.
+    - NONE: No words have timing information.
+
+    Usage:
+        >>> mode = WordTimingMode.COMPLETE
+        >>> print(mode)
+        WordTimingMode.COMPLETE
+        >>> print(mode.value)
+        'complete'
+    """
 
     COMPLETE = "complete"
     PARTIAL = "partial"
@@ -72,24 +127,53 @@ class WordTimingMode(Enum):
 
 
 class SegmentDuration(Enum):
-    """Enumeration of segment duration types."""
+    """Enumeration of segment duration types.
+
+    This enum is used to indicate special duration cases for segments:
+    - ZERO: Represents a segment with zero duration.
+
+    Usage:
+        >>> duration = SegmentDuration.ZERO
+        >>> print(duration)
+        SegmentDuration.ZERO
+        >>> print(duration.value)
+        'zero'
+    """
 
     ZERO = "zero"
 
 
 class WordDuration(Enum):
-    """Enumeration of word duration types."""
+    """Enumeration of word duration types.
+
+    This enum is used to indicate special duration cases for words:
+    - ZERO: Represents a word with zero duration.
+
+    Usage:
+        >>> duration = WordDuration.ZERO
+        >>> print(duration)
+        WordDuration.ZERO
+        >>> print(duration.value)
+        'zero'
+    """
 
     ZERO = "zero"
 
 
 @dataclass
 class Transcriber:
-    """Represents the transcriber metadata.
+    """Represents metadata about the transcription system or service.
+
+    This class stores information about the transcriber, including its name and version.
 
     Attributes:
-        name (str): Name of the transcriber.
-        version (str): Version of the transcriber.
+        name (str): The name of the transcription system or service.
+        version (str): The version of the transcription system or service.
+
+    Example:
+        >>> transcriber = Transcriber(name="AutoTranscribe", version="2.1.0")
+        >>> print(f"Transcribed by {transcriber.name} v{transcriber.version}")
+        Transcribed by AutoTranscribe v2.1.0
     """
 
     name: str
@@ -98,13 +182,24 @@ class Transcriber:
 
 @dataclass
 class Source:
-    """Represents the source metadata.
+    """Represents the source metadata for the transcription.
+
+    This class contains information about the original media file that was transcribed,
+    including its location, duration, and languages.
 
     Attributes:
-        uri (Optional[str]): URI of the source file.
-        duration (Optional[float]): Duration of the source in seconds.
-        languages (Optional[List[Lang]]): List of languages in the source.
-        additional_info (Dict[str, Any]): Additional metadata.
+        uri (Optional[str]): URI or path to the source media file.
+        duration (Optional[float]): Duration of the source media in seconds.
+        languages (Optional[List[Lang]]): List of languages present in the source media.
+        additional_info (Dict[str, Any]): Additional metadata about the source.
+
+    Example:
+        >>> source = Source(
+        ...     uri="https://example.com/audio.mp3",
+        ...     duration=300.5,
+        ...     languages=[Lang("en"), Lang("es")],
+        ...     additional_info={"bitrate": "128kbps"}
+        ... )
     """
 
     uri: Optional[str] = None
@@ -115,15 +210,28 @@ class Source:
 
 @dataclass
 class Metadata:
-    """Represents the metadata of the STJ.
+    """Represents the metadata of the Standard Transcription JSON (STJ).
+
+    This class contains various metadata fields that provide context and
+    information about the transcription process and content.
 
     Attributes:
-        transcriber (Transcriber): Transcriber information.
-        created_at (datetime): Creation timestamp.
-        source (Optional[Source]): Source information.
-        languages (Optional[List[Lang]]): List of languages.
-        confidence_threshold (Optional[float]): Confidence threshold between 0.0 and 1.0.
-        additional_info (Dict[str, Any]): Additional metadata.
+        transcriber (Transcriber): Information about the transcription system used.
+        created_at (datetime): Timestamp of when the transcription was created.
+        source (Optional[Source]): Information about the source media, if available.
+        languages (Optional[List[Lang]]): List of languages used in the transcription.
+        confidence_threshold (Optional[float]): Minimum confidence score for included words, if applicable.
+        additional_info (Dict[str, Any]): Additional metadata key-value pairs.
+
+    Example:
+        >>> from datetime import datetime, timezone
+        >>> metadata = Metadata(
+        ...     transcriber=Transcriber(name="AutoTranscribe", version="2.1.0"),
+        ...     created_at=datetime.now(timezone.utc),
+        ...     languages=[Lang("en"), Lang("es")],
+        ...     confidence_threshold=0.8,
+        ...     additional_info={"audio_quality": "high"}
+        ... )
     """
 
     transcriber: Transcriber
@@ -138,10 +246,20 @@ class Metadata:
 class Speaker:
     """Represents a speaker in the transcript.
 
+    This class is used to identify and provide information about individuals
+    speaking in the transcribed content.
+
     Attributes:
-        id (str): Unique identifier for the speaker.
-        name (Optional[str]): Name of the speaker.
-        additional_info (Dict[str, Any]): Additional metadata.
+        id (str): Unique identifier for the speaker within the transcript.
+        name (Optional[str]): Name or label for the speaker.
+        additional_info (Dict[str, Any]): Additional metadata about the speaker.
+
+    Example:
+        >>> speaker = Speaker(
+        ...     id="speaker1",
+        ...     name="John Doe",
+        ...     additional_info={"age": 30, "gender": "male"}
+        ... )
     """
 
     id: str
@@ -153,12 +271,24 @@ class Speaker:
 class Style:
     """Represents a style in the transcript.
 
+    Styles can be used to indicate different formatting or presentation
+    for segments of the transcript.
+
     Attributes:
-        id (str): Unique identifier for the style.
-        description (Optional[str]): Description of the style.
-        formatting (Optional[Dict[str, Any]]): Formatting information.
-        positioning (Optional[Dict[str, Any]]): Positioning information.
-        additional_info (Dict[str, Any]): Additional metadata.
+        id (str): Unique identifier for the style within the transcript.
+        description (Optional[str]): Human-readable description of the style.
+        formatting (Optional[Dict[str, Any]]): Formatting information for the style.
+        positioning (Optional[Dict[str, Any]]): Positioning information for the style.
+        additional_info (Dict[str, Any]): Additional metadata about the style.
+
+    Example:
+        >>> style = Style(
+        ...     id="emphasis",
+        ...     description="Emphasized speech",
+        ...     formatting={"font-weight": "bold"},
+        ...     positioning={"vertical-align": "super"},
+        ...     additional_info={"usage": "for important phrases"}
+        ... )
     """
 
     id: str
@@ -170,15 +300,31 @@ class Style:
 
 @dataclass
 class Word:
-    """
-    Represents a word with timing and confidence information.
+    """Represents a single word with timing and confidence information.
+
+    This class is used to store detailed information about individual words
+    within a transcript segment.
 
     Attributes:
-        start (float): The start time of the word in seconds.
-        end (float): The end time of the word in seconds.
-        text (str): The text of the word.
-        confidence (Optional[float]): Confidence score between 0.0 and 1.0.
-        additional_info (Dict[str, Any]): Additional metadata.
+        start (float): Start time of the word in seconds from the beginning of the media.
+        end (float): End time of the word in seconds from the beginning of the media.
+        text (str): The text content of the word.
+        confidence (Optional[float]): Confidence score for the word recognition, between 0.0 and 1.0.
+        additional_info (Dict[str, Any]): Additional metadata about the word.
+
+    Constraints:
+        - start must be >= 0
+        - end must be > start (unless word_duration is "zero")
+        - confidence, if provided, must be between 0.0 and 1.0
+
+    Example:
+        >>> word = Word(
+        ...     start=10.5,
+        ...     end=11.0,
+        ...     text="hello",
+        ...     confidence=0.95,
+        ...     additional_info={"phoneme": "hə'ləʊ"}
+        ... )
     """
 
     start: float
@@ -190,20 +336,43 @@ class Word:
 
 @dataclass
 class Segment:
-    """
-    Represents a segment in the transcript.
+    """Represents a timed segment in the transcript with optional word-level detail.
+
+    A segment is a continuous portion of the transcript with its own timing, speaker,
+    and optional word-level information. Segments must not overlap with each other
+    and must contain valid timing information.
+
+    Constraints:
+        - start must be >= 0
+        - end must be > start (unless segment_duration is "zero")
+        - speaker_id must reference a valid speaker if provided
+        - style_id must reference a valid style if provided
+        - words must match segment text if word_timing_mode is "complete"
+
+    Example:
+        >>> segment = Segment(
+        ...     start=0.0,
+        ...     end=5.0,
+        ...     text="Hello world",
+        ...     speaker_id="speaker1",
+        ...     words=[
+        ...         Word(start=0.0, end=1.0, text="Hello"),
+        ...         Word(start=1.0, end=2.0, text="world")
+        ...     ],
+        ...     word_timing_mode=WordTimingMode.COMPLETE
+        ... )
 
     Attributes:
-        start (float): The start time of the segment in seconds.
-        end (float): The end time of the segment in seconds.
-        text (str): The text of the segment.
-        speaker_id (Optional[str]): ID of the speaker.
-        confidence (Optional[float]): Confidence score between 0.0 and 1.0.
-        language (Optional[Lang]): Language of the segment.
-        style_id (Optional[str]): ID of the style.
-        words (Optional[List[Word]]): List of words in the segment.
-        word_timing_mode (Optional[WordTimingMode]): Word timing mode.
-        additional_info (Dict[str, Any]): Additional metadata.
+        start (float): Start time in seconds from the beginning of the media
+        end (float): End time in seconds from the beginning of the media
+        text (str): The transcribed text content
+        speaker_id (Optional[str]): Reference to a speaker.id in the transcript
+        confidence (Optional[float]): Confidence score between 0.0 and 1.0
+        language (Optional[Lang]): ISO 639 language code
+        style_id (Optional[str]): Reference to a style.id in the transcript
+        words (Optional[List[Word]]): Word-level timing and text information
+        word_timing_mode (Optional[WordTimingMode]): Indicates completeness of word timing
+        additional_info (Dict[str, Any]): Additional metadata for extensibility
     """
 
     start: float
@@ -220,13 +389,30 @@ class Segment:
 
 @dataclass
 class Transcript:
-    """
-    Represents the transcript.
+    """Represents the main content of the transcription.
+
+    This class contains the core transcription data, including speakers,
+    segments, and optional style information.
 
     Attributes:
-        speakers (List[Speaker]): List of speakers.
-        segments (List[Segment]): List of segments.
-        styles (Optional[List[Style]]): List of styles.
+        speakers (List[Speaker]): List of speakers in the transcript.
+        segments (List[Segment]): List of transcript segments.
+        styles (Optional[List[Style]]): List of styles used in the transcript, if any.
+
+    Example:
+        >>> transcript = Transcript(
+        ...     speakers=[
+        ...         Speaker(id="S1", name="John"),
+        ...         Speaker(id="S2", name="Jane")
+        ...     ],
+        ...     segments=[
+        ...         Segment(start=0.0, end=5.0, text="Hello, how are you?", speaker_id="S1"),
+        ...         Segment(start=5.1, end=8.5, text="I'm fine, thanks!", speaker_id="S2")
+        ...     ],
+        ...     styles=[
+        ...         Style(id="emphasis", description="Emphasized speech")
+        ...     ]
+        ... )
     """
 
     speakers: List[Speaker] = field(default_factory=list)
@@ -236,16 +422,57 @@ class Transcript:
 
 @dataclass
 class StandardTranscriptionJSON:
-    """
-    Represents the entire Standard Transcription JSON (STJ) object.
+    """A complete implementation of the Standard Transcription JSON (STJ) format.
 
-    This class encapsulates the complete structure of an STJ file, including
-    metadata and transcript information. It provides methods for loading from
-    and saving to files, as well as comprehensive validation.
+    This class serves as the primary interface for working with STJ data, providing
+    methods for loading, saving, validating, and manipulating transcription content.
+    It enforces the STJ specification while offering flexibility through optional fields
+    and additional metadata.
+
+    Key Features:
+        - Robust file loading and saving
+        - Comprehensive validation against STJ specification
+        - Support for speakers, styles, and segments
+        - Word-level timing and confidence information
+        - Extensible metadata through additional_info fields
+
+    Basic Usage:
+        >>> # Create a new STJ instance
+        >>> transcriber = Transcriber(name="MyTranscriber", version="1.0")
+        >>> metadata = Metadata(transcriber=transcriber, created_at=datetime.now(timezone.utc))
+        >>> stj = StandardTranscriptionJSON(metadata=metadata, transcript=Transcript())
+        >>>
+        >>> # Load existing STJ file
+        >>> stj = StandardTranscriptionJSON.from_file("transcript.stj.json")
+        >>>
+        >>> # Validate the data
+        >>> try:
+        ...     stj.validate()
+        ... except ValidationError as e:
+        ...     print("Validation failed:", e.issues)
+
+    Advanced Usage:
+        >>> # Add a new segment
+        >>> segment = Segment(
+        ...     start=0.0,
+        ...     end=5.0,
+        ...     text="Hello world",
+        ...     speaker_id="speaker1",
+        ...     words=[
+        ...         Word(start=0.0, end=1.0, text="Hello"),
+        ...         Word(start=1.0, end=2.0, text="world")
+        ...     ]
+        ... )
+        >>> stj.transcript.segments.append(segment)
+        >>>
+        >>> # Save changes
+        >>> stj.to_file("updated_transcript.stj.json")
 
     Attributes:
-        metadata (Metadata): Metadata of the STJ.
-        transcript (Transcript): Transcript data.
+        metadata (Metadata): Contains information about the transcription process,
+            including transcriber details, creation time, and optional source information.
+        transcript (Transcript): Contains the actual transcript data, including
+            segments, speakers, and optional style information.
     """
 
     metadata: Metadata
@@ -523,16 +750,46 @@ class StandardTranscriptionJSON:
             return data
 
     def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
-        """Perform comprehensive validation according to STJ 0.4 specification.
+        """Perform comprehensive validation of the STJ data.
 
+        Validates all aspects of the STJ data according to the specification, including:
+        - Language code validity using ISO 639 standards
+        - Confidence score ranges (0.0 to 1.0)
+        - Speaker and style ID references
+        - Segment timing and ordering
+        - Word timing and content matching
+        - Zero-duration segment handling
+
+        The validation process checks:
+        1. Language codes in metadata and segments
+        2. Confidence threshold and scores
+        3. Speaker and style ID references
+        4. Segment ordering and overlap
+        5. Word timing and content consistency
+        
         Args:
-            raise_exception (bool): If True and validation issues are found, raise ValidationError.
+            raise_exception: If True, raises ValidationError when issues are found.
+                If False, returns a list of validation issues.
 
         Returns:
-            List[ValidationIssue]: List of validation issues.
+            List[ValidationIssue]: List of validation issues found, empty if none.
 
         Raises:
             ValidationError: If validation fails and raise_exception is True.
+
+        Example:
+            >>> # Get validation issues without raising
+            >>> issues = stj.validate(raise_exception=False)
+            >>> for issue in issues:
+            ...     print(f"{issue.location}: {issue.message}")
+            >>>
+            >>> # Validate with exception handling
+            >>> try:
+            ...     stj.validate(raise_exception=True)
+            ... except ValidationError as e:
+            ...     print("Validation failed:")
+            ...     for issue in e.issues:
+            ...         print(f"- {issue}")
         """
         issues = []
         issues.extend(self._validate_language_codes())
@@ -804,3 +1061,10 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
+
+
+
+
+
+
+
