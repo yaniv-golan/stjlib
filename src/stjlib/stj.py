@@ -68,6 +68,7 @@ class ValidationError(STJError):
         :class:`ValidationIssue`: Represents individual validation issues.
         :meth:`StandardTranscriptionJSON.validate`: Method that raises this exception.
     """
+
     def __init__(self, issues: List["ValidationIssue"]):
         self.issues = issues
         super().__init__(self.__str__())
@@ -100,6 +101,7 @@ class ValidationIssue:
     See Also:
         :class:`ValidationError`: Exception that aggregates multiple validation issues.
     """
+
     message: str
     location: Optional[str] = None
 
@@ -472,7 +474,7 @@ class StandardTranscriptionJSON:
             ... )
             >>> stj = StandardTranscriptionJSON(metadata, transcript)
             >>> stj._validate_metadata()  # Valid metadata
-            >>> 
+            >>>
             >>> stj.metadata = Metadata(transcriber=None, created_at=None)
             >>> stj._validate_metadata()  # Raises ValidationError
 
@@ -651,18 +653,18 @@ class StandardTranscriptionJSON:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StandardTranscriptionJSON":
         """Create a StandardTranscriptionJSON object from a dictionary.
-    
+
         Args:
             data (Dict[str, Any]): Dictionary containing STJ data.
-    
+
         Returns:
             StandardTranscriptionJSON: A new StandardTranscriptionJSON object.
-    
+
         Raises:
             ValidationError: If the input data is invalid. See :class:`ValidationError` for details
                 about error handling and :class:`ValidationIssue` for the structure of
                 validation issues.
-    
+
         Example:
             >>> data: Dict[str, Any] = {
             ...     "metadata": {
@@ -1163,9 +1165,3 @@ class StandardTranscriptionJSON:
                         )
                     )
         return issues
-
-
-
-
-
-
