@@ -6,7 +6,6 @@ from .stj import (
     ValidationError,
     ValidationIssue,
     WordTimingMode,
-    SegmentDuration,
     WordDuration,
     Transcriber,
     Metadata,

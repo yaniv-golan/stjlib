@@ -32,10 +32,15 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+import re
+import unicodedata
 
 from iso639 import Lang
+import iso639
 from iso639.exceptions import InvalidLanguageValue
 from dateutil.parser import parse as parse_datetime
+from urllib.parse import urlparse
+from decimal import Decimal, ROUND_HALF_EVEN
 
 
 class STJError(Exception):
@@ -134,23 +139,6 @@ class WordTimingMode(Enum):
     NONE = "none"
 
 
-class SegmentDuration(Enum):
-    """Enumeration of segment duration types.
-
-    This enum is used to indicate special duration cases for segments:
-    - ZERO: Represents a segment with zero duration.
-
-    Usage:
-        >>> duration = SegmentDuration.ZERO
-        >>> print(duration)
-        SegmentDuration.ZERO
-        >>> print(duration.value)
-        'zero'
-    """
-
-    ZERO = "zero"
-
-
 class WordDuration(Enum):
     """Enumeration of word duration types.
 
@@ -199,21 +187,23 @@ class Source:
         uri (Optional[str]): URI or path to the source media file.
         duration (Optional[float]): Duration of the source media in seconds.
         languages (Optional[List[Lang]]): List of languages present in the source media.
-        additional_info (Dict[str, Any]): Additional metadata about the source.
+        extensions (Dict[str, Any]): Additional metadata about the source.
 
     Example:
         >>> source = Source(
         ...     uri="https://example.com/audio.mp3",
         ...     duration=300.5,
         ...     languages=[Lang("en"), Lang("es")],
-        ...     additional_info={"bitrate": "128kbps"}
+        ...     extensions={"bitrate": "128kbps"}
         ... )
     """
 
     uri: Optional[str] = None
     duration: Optional[float] = None
     languages: Optional[List[Lang]] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    extensions: Dict[str, Any] = field(
+        default_factory=dict
+    )  # Ensure extensions is used instead of additional_info
 
 
 @dataclass
@@ -226,28 +216,31 @@ class Metadata:
     Attributes:
         transcriber (Transcriber): Information about the transcription system used.
         created_at (datetime): Timestamp of when the transcription was created.
+        version (str): STJ specification version (e.g., "0.5.0").
         source (Optional[Source]): Information about the source media, if available.
         languages (Optional[List[Lang]]): List of languages used in the transcription.
         confidence_threshold (Optional[float]): Minimum confidence score for included words, if applicable.
-        additional_info (Dict[str, Any]): Additional metadata key-value pairs.
+        extensions (Dict[str, Any]): Additional metadata key-value pairs.
 
     Example:
         >>> from datetime import datetime, timezone
         >>> metadata = Metadata(
         ...     transcriber=Transcriber(name="AutoTranscribe", version="2.1.0"),
         ...     created_at=datetime.now(timezone.utc),
+        ...     version="0.5.0",
         ...     languages=[Lang("en"), Lang("es")],
         ...     confidence_threshold=0.8,
-        ...     additional_info={"audio_quality": "high"}
+        ...     extensions={"audio_quality": "high"}
         ... )
     """
 
     transcriber: Transcriber
     created_at: datetime
+    version: str  # Added for v0.5.0 compliance
     source: Optional[Source] = None
     languages: Optional[List[Lang]] = None
     confidence_threshold: Optional[float] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    extensions: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -260,19 +253,19 @@ class Speaker:
     Attributes:
         id (str): Unique identifier for the speaker within the transcript.
         name (Optional[str]): Name or label for the speaker.
-        additional_info (Dict[str, Any]): Additional metadata about the speaker.
+        extensions (Dict[str, Any]): Additional metadata about the speaker.
 
     Example:
         >>> speaker = Speaker(
         ...     id="speaker1",
         ...     name="John Doe",
-        ...     additional_info={"age": 30, "gender": "male"}
+        ...     extensions={"age": 30, "gender": "male"}
         ... )
     """
 
     id: str
     name: Optional[str] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    extensions: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -284,26 +277,23 @@ class Style:
 
     Attributes:
         id (str): Unique identifier for the style within the transcript.
-        description (Optional[str]): Human-readable description of the style.
-        formatting (Optional[Dict[str, Any]]): Formatting information for the style.
-        positioning (Optional[Dict[str, Any]]): Positioning information for the style.
-        additional_info (Dict[str, Any]): Additional metadata about the style.
+        text (Optional[Dict[str, Any]]): Text appearance information.
+        display (Optional[Dict[str, Any]]): Display information for the style.
+        extensions (Dict[str, Any]): Additional metadata about the style.
 
     Example:
         >>> style = Style(
         ...     id="emphasis",
-        ...     description="Emphasized speech",
-        ...     formatting={"font-weight": "bold"},
-        ...     positioning={"vertical-align": "super"},
-        ...     additional_info={"usage": "for important phrases"}
+        ...     text={"font-weight": "bold"},
+        ...     display={"vertical-align": "super"},
+        ...     extensions={"usage": "for important phrases"}
         ... )
     """
 
     id: str
-    description: Optional[str] = None
-    formatting: Optional[Dict[str, Any]] = None
-    positioning: Optional[Dict[str, Any]] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    text: Optional[Dict[str, Any]] = None
+    display: Optional[Dict[str, Any]] = None
+    extensions: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -318,7 +308,7 @@ class Word:
         end (float): End time of the word in seconds from the beginning of the media.
         text (str): The text content of the word.
         confidence (Optional[float]): Confidence score for the word recognition, between 0.0 and 1.0.
-        additional_info (Dict[str, Any]): Additional metadata about the word.
+        extensions (Dict[str, Any]): Additional metadata about the word.
 
     Constraints:
         - start must be >= 0
@@ -331,7 +321,7 @@ class Word:
         ...     end=11.0,
         ...     text="hello",
         ...     confidence=0.95,
-        ...     additional_info={"phoneme": "hə'ləʊ"}
+        ...     extensions={"phoneme": "hə'ləʊ"}
         ... )
     """
 
@@ -339,7 +329,7 @@ class Word:
     end: float
     text: str
     confidence: Optional[float] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    extensions: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -349,26 +339,6 @@ class Segment:
     A segment is a continuous portion of the transcript with its own timing, speaker,
     and optional word-level information. Segments must not overlap with each other
     and must contain valid timing information.
-
-    Constraints:
-        - start must be >= 0
-        - end must be > start (unless segment_duration is "zero")
-        - speaker_id must reference a valid speaker if provided
-        - style_id must reference a valid style if provided
-        - words must match segment text if word_timing_mode is "complete"
-
-    Example:
-        >>> segment = Segment(
-        ...     start=0.0,
-        ...     end=5.0,
-        ...     text="Hello world",
-        ...     speaker_id="speaker1",
-        ...     words=[
-        ...         Word(start=0.0, end=1.0, text="Hello"),
-        ...         Word(start=1.0, end=2.0, text="world")
-        ...     ],
-        ...     word_timing_mode=WordTimingMode.COMPLETE
-        ... )
 
     Attributes:
         start (float): Start time in seconds from the beginning of the media
@@ -380,7 +350,8 @@ class Segment:
         style_id (Optional[str]): Reference to a style.id in the transcript
         words (Optional[List[Word]]): Word-level timing and text information
         word_timing_mode (Optional[WordTimingMode]): Indicates completeness of word timing
-        additional_info (Dict[str, Any]): Additional metadata for extensibility
+        is_zero_duration (bool): Indicates if the segment is zero-duration
+        extensions (Dict[str, Any]): Additional metadata for extensibility
     """
 
     start: float
@@ -392,7 +363,8 @@ class Segment:
     style_id: Optional[str] = None
     words: Optional[List[Word]] = None
     word_timing_mode: Optional[WordTimingMode] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    is_zero_duration: bool = field(default=False)
+    extensions: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -447,89 +419,6 @@ class StandardTranscriptionJSON:
     metadata: Metadata
     transcript: Transcript
 
-    def _validate_metadata(self):
-        """Validate the metadata of the STJ object.
-
-        Raises:
-            ValidationError: If metadata validation fails. See :class:`ValidationError` for details
-                about error handling and :class:`ValidationIssue` for the structure of
-                validation issues.
-
-        Example:
-            >>> metadata: Metadata = Metadata(
-            ...     transcriber=Transcriber(name="AutoTranscribe", version="2.1.0"),
-            ...     created_at=datetime.now(timezone.utc)
-            ... )
-            >>> transcript: Transcript = Transcript(
-            ...     speakers=[
-            ...         Speaker(id="S1", name="John"),
-            ...         Speaker(id="S2", name="Jane")
-            ...     ],
-            ...     segments=[
-            ...         Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
-            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
-            ...     ],
-            ...     styles=[
-            ...         Style(id="emphasis", description="Emphasized speech")
-            ...     ]
-            ... )
-            >>> stj = StandardTranscriptionJSON(metadata, transcript)
-            >>> stj._validate_metadata()  # Valid metadata
-            >>>
-            >>> stj.metadata = Metadata(transcriber=None, created_at=None)
-            >>> stj._validate_metadata()  # Raises ValidationError
-
-        See Also:
-            :class:`ValidationError`: Raised when metadata validation fails.
-            :class:`ValidationIssue`: Represents individual validation issues.
-        """
-        # Existing validation code...
-
-    def _validate_transcript(self):
-        """Validate the transcript of the STJ object.
-
-        Raises:
-            ValidationError: If transcript validation fails. See :class:`ValidationError` for details
-                about error handling and :class:`ValidationIssue` for the structure of
-                validation issues.
-
-        Example:
-            >>> transcript: Transcript = Transcript(
-            ...     speakers=[
-            ...         Speaker(id="S1", name="John"),
-            ...         Speaker(id="S2", name="Jane")
-            ...     ],
-            ...     segments=[
-            ...         Segment(start=0.0, end=1.0, text="Hello", confidence=0.95),
-            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
-            ...     ],
-            ...     styles=[
-            ...         Style(id="emphasis", description="Emphasized speech")
-            ...     ]
-            ... )
-            >>> stj = StandardTranscriptionJSON(metadata, transcript)
-            >>> stj._validate_transcript()  # Valid transcript
-            >>> stj.transcript = Transcript(
-            ...     speakers=[
-            ...         Speaker(id="S1", name="John"),
-            ...         Speaker(id="S2", name="Jane")
-            ...     ],
-            ...     segments=[
-            ...         Segment(start=0.0, end=1.5, text="Hello", confidence=0.95),
-            ...         Segment(start=1.0, end=2.0, text="world", confidence=0.98)
-            ...     ],
-            ...     styles=[
-            ...         Style(id="emphasis", description="Emphasized speech")
-            ...     ]
-            ... )
-            >>> stj._validate_transcript()  # Raises ValidationError
-
-        See Also:
-            :class:`ValidationError`: Raised when transcript validation fails.
-            :class:`ValidationIssue`: Represents individual validation issues.
-        """
-        # Existing validation code...
-
     def validate(self, raise_exception: bool = True) -> List[ValidationIssue]:
         """Perform comprehensive validation of the STJ data.
 
@@ -540,13 +429,6 @@ class StandardTranscriptionJSON:
         - Segment timing and ordering
         - Word timing and content matching
         - Zero-duration segment handling
-
-        The validation process checks:
-        1. Language codes in metadata and segments
-        2. Confidence threshold and scores
-        3. Speaker and style ID references
-        4. Segment ordering and overlap
-        5. Word timing and content consistency
 
         Args:
             raise_exception: If True, raises ValidationError when issues are found.
@@ -579,13 +461,41 @@ class StandardTranscriptionJSON:
             :meth:`_validate_speaker_and_style_ids`: Method for validating speaker and style IDs.
             :meth:`_validate_segments`: Method for validating segments.
             :meth:`_validate_confidence_scores`: Method for validating confidence scores.
+
         """
         issues = []
+
+        # Add required fields validation
+        issues.extend(self._validate_required_fields())
+        issues.extend(self._validate_types())
+
+        # Version validation
+        issues.extend(self._validate_version(self.metadata.version))
+
+        # URI validation
+        if self.metadata.source and self.metadata.source.uri:
+            issues.extend(
+                self._validate_uri(self.metadata.source.uri, "metadata.source.uri")
+            )
+
+        # Extensions validation at all levels
+        issues.extend(
+            self._validate_extensions(self.metadata.extensions, "metadata.extensions")
+        )
+        if self.metadata.source:
+            issues.extend(
+                self._validate_extensions(
+                    self.metadata.source.extensions, "metadata.source.extensions"
+                )
+            )
+
+        # Add existing validation calls
         issues.extend(self._validate_language_codes())
         issues.extend(self._validate_confidence_threshold())
         issues.extend(self._validate_speaker_and_style_ids())
         issues.extend(self._validate_segments())
         issues.extend(self._validate_confidence_scores())
+        issues.extend(self._validate_style_format())
 
         if issues and raise_exception:
             raise ValidationError(issues)
@@ -612,7 +522,7 @@ class StandardTranscriptionJSON:
             ValidationError: If validation fails and raise_exception is True.
         """
         try:
-            with open(filename, "r", encoding="utf-8") as f:
+            with open(filename, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             stj_instance = cls.from_dict(data)
             if validate:
@@ -628,7 +538,9 @@ class StandardTranscriptionJSON:
             ) from e
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], validate: bool = True) -> "StandardTranscriptionJSON":
+    def from_dict(
+        cls, data: Dict[str, Any], validate: bool = True
+    ) -> "StandardTranscriptionJSON":
         """Create a StandardTranscriptionJSON object from a dictionary.
 
         Args:
@@ -663,63 +575,34 @@ class StandardTranscriptionJSON:
             raise KeyError("Missing required field: 'transcriber' in metadata.")
         if "created_at" not in data:
             raise KeyError("Missing required field: 'created_at' in metadata.")
+        if "version" not in data:
+            raise KeyError("Missing required field: 'version' in metadata.")
 
-        transcriber_data = data.get("transcriber", {})
-        transcriber = Transcriber(**transcriber_data)
-        created_at_str = data.get("created_at")
-        created_at = parse_datetime(created_at_str) if created_at_str else datetime.now(timezone.utc)
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+        # Handle first-class fields explicitly
+        transcriber = Transcriber(**data["transcriber"])
+        created_at_str = data["created_at"]
+        # Parse the ISO format string into a datetime object
+        created_at = parse_datetime(created_at_str)
+        version = data["version"]
 
-        source = None
-        if "source" in data:
-            source_data = data["source"]
-            source_languages = [Lang(code) for code in source_data.get("languages", [])]
-            source_additional_info = {
-                k: v
-                for k, v in source_data.items()
-                if k not in {"uri", "duration", "languages"}
-            }
-            source = Source(
-                uri=source_data.get("uri"),
-                duration=source_data.get("duration"),
-                languages=source_languages if source_languages else None,
-                additional_info=source_additional_info,
-            )
-        try:
-            metadata_languages = (
-                [Lang(code) for code in data.get("languages", [])]
-                if data.get("languages")
-                else None
-            )
-        except InvalidLanguageValue as e:
-            raise ValidationError(
-                [
-                    ValidationIssue(
-                        message=f"Invalid language code: {str(e)}",
-                        location="Metadata.languages",
-                    )
-                ]
-            )
-        additional_info = {
-            k: v
-            for k, v in data.items()
-            if k
-            not in {
-                "transcriber",
-                "created_at",
-                "source",
-                "languages",
-                "confidence_threshold",
-            }
-        }
+        # Handle optional first-class fields
+        source = (
+            cls._deserialize_source(data.get("source")) if "source" in data else None
+        )
+        languages = cls._deserialize_languages(data.get("languages"))
+        confidence_threshold = data.get("confidence_threshold")
+
+        # Extensions is its own field in the input
+        extensions = data.get("extensions", {})
+
         return Metadata(
             transcriber=transcriber,
-            created_at=created_at,
+            created_at=created_at,  # Now passing a datetime object
+            version=version,
             source=source,
-            languages=metadata_languages,
-            confidence_threshold=data.get("confidence_threshold"),
-            additional_info=additional_info,
+            languages=languages,
+            confidence_threshold=confidence_threshold,
+            extensions=extensions,
         )
 
     @classmethod
@@ -735,26 +618,20 @@ class StandardTranscriptionJSON:
         """
         speakers = []
         for speaker_data in s.get("speakers", []):
-            additional_info = {k: v for k, v in speaker_data.items() if k not in {"id", "name"}}
             speaker = Speaker(
                 id=speaker_data["id"],
                 name=speaker_data.get("name"),
-                additional_info=additional_info
+                extensions=speaker_data.get("extensions", {}),
             )
             speakers.append(speaker)
 
         styles = []
         for style_data in s.get("styles", []):
-            additional_info = {
-                k: v for k, v in style_data.items()
-                if k not in {"id", "description", "formatting", "positioning"}
-            }
             style = Style(
                 id=style_data["id"],
-                description=style_data.get("description"),
-                formatting=style_data.get("formatting"),
-                positioning=style_data.get("positioning"),
-                additional_info=additional_info,
+                text=style_data.get("text"),
+                display=style_data.get("display"),
+                extensions=style_data.get("extensions", {}),
             )
             styles.append(style)
         styles = styles if styles else None
@@ -763,48 +640,40 @@ class StandardTranscriptionJSON:
         for segment_data in s.get("segments", []):
             words = []
             for word_data in segment_data.get("words", []):
-                word_additional_info = {
-                    k: v for k, v in word_data.items()
-                    if k not in {"start", "end", "text", "confidence"}
-                }
                 word = Word(
                     start=word_data["start"],
                     end=word_data["end"],
                     text=word_data["text"],
                     confidence=word_data.get("confidence"),
-                    additional_info=word_additional_info,
+                    extensions=word_data.get("extensions", {}),
                 )
                 words.append(word)
             words = words if words else None
 
             try:
-                language = Lang(segment_data["language"]) if segment_data.get("language") else None
+                language = (
+                    Lang(segment_data["language"])
+                    if segment_data.get("language")
+                    else None
+                )
             except InvalidLanguageValue:
                 language = None  # Handle invalid language code
 
-            # Handle word_timing_mode
+            # Get word_timing_mode as string
             word_timing_mode = segment_data.get("word_timing_mode")
             if word_timing_mode:
                 try:
-                    word_timing_mode = WordTimingMode(word_timing_mode)
+                    word_timing_mode = WordTimingMode(word_timing_mode).value  # Convert to string value
                 except ValueError:
-                    # Keep the invalid value for validation to catch
-                    pass
+                    raise ValidationError(
+                        [
+                            ValidationIssue(
+                                message=f"Invalid word_timing_mode value: {word_timing_mode}",
+                                location=f"Segment word_timing_mode",
+                            )
+                        ]
+                    )
 
-            segment_additional_info = {
-                k: v for k, v in segment_data.items()
-                if k not in {
-                    "start",
-                    "end",
-                    "text",
-                    "speaker_id",
-                    "confidence",
-                    "language",
-                    "style_id",
-                    "words",
-                    "word_timing_mode",
-                }
-            }
             segment = Segment(
                 start=segment_data["start"],
                 end=segment_data["end"],
@@ -814,10 +683,12 @@ class StandardTranscriptionJSON:
                 language=language,
                 style_id=segment_data.get("style_id"),
                 words=words,
-                word_timing_mode=word_timing_mode,
-                additional_info=segment_additional_info,
+                word_timing_mode=word_timing_mode,  # Use string value
+                is_zero_duration=segment_data.get("is_zero_duration", False),
+                extensions=segment_data.get("extensions", {}),
             )
             segments.append(segment)
+
         return Transcript(speakers=speakers, segments=segments, styles=styles)
 
     def to_file(self, filename: str):
@@ -855,11 +726,14 @@ class StandardTranscriptionJSON:
             Any: Serialized data.
         """
         if isinstance(data, dict):
-            return {
-                key: self._custom_serialize(value)
-                for key, value in data.items()
-                if value is not None
-            }
+            result = {}
+            for key, value in data.items():
+                # Skip is_zero_duration if it's False
+                if key == "is_zero_duration" and value is False:
+                    continue
+                if value is not None:  # Keep existing None check
+                    result[key] = self._custom_serialize(value)
+            return result
         elif isinstance(data, list):
             return [self._custom_serialize(item) for item in data]
         elif isinstance(data, datetime):
@@ -871,6 +745,9 @@ class StandardTranscriptionJSON:
         elif isinstance(data, Enum):
             # Return the value of the Enum
             return data.value
+        elif isinstance(data, str):
+            # Normalize string to NFC
+            return unicodedata.normalize("NFC", data)
         else:
             return data
 
@@ -879,39 +756,87 @@ class StandardTranscriptionJSON:
         Validate language codes in metadata and segments.
 
         This method checks the validity of language codes in the metadata,
-        source information, and individual segments.
+        source information, and individual segments. It also enforces that
+        the same language is not represented using both ISO 639-1 and ISO 639-3 codes.
 
         Returns:
             List[ValidationIssue]: List of validation issues related to language codes.
         """
         issues = []
-        # Validate metadata languages
-        if self.metadata.languages:
-            for lang in self.metadata.languages:
-                if not lang.pt1 and not lang.pt3:
+        language_code_map = {}
+
+        # Helper function to map language codes to their ISO 639-1 and ISO 639-3 equivalents
+        def map_language_codes(codes: List[str], context: str):
+            for code in codes:
+                try:
+                    # Use Lang directly instead of Language.from_part1/3
+                    lang = Lang(code)
+                    primary = lang.pt1 or lang.pt3
+                    language_code_map.setdefault(lang.name.lower(), set()).add(code)
+                except (KeyError, InvalidLanguageValue):
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid language code in metadata: {lang}",
-                            location="Metadata.languages",
+                            message=f"Invalid language code in {context}: {code}",
+                            location=context,
+                        )
+                    )
+
+        # Validate and map metadata.languages
+        if self.metadata.languages:
+            map_language_codes(self.metadata.languages, "metadata.languages")
+
+        # Validate and map metadata.source.languages
+        if self.metadata.source and self.metadata.source.languages:
+            map_language_codes(
+                self.metadata.source.languages, "metadata.source.languages"
+            )
+
+        # Check for consistency: same language should not have both ISO 639-1 and ISO 639-3 codes
+        for language, codes in language_code_map.items():
+            has_part1 = any(len(code) == 2 for code in codes)
+            has_part3 = any(len(code) == 3 for code in codes)
+            if has_part1 and has_part3:
+                issues.append(
+                    ValidationIssue(
+                        message=f"Language code inconsistency for '{language}': Mix of ISO 639-1 and ISO 639-3 codes ({', '.join(codes)})",
+                        location="metadata.languages and metadata.source.languages",
+                    )
+                )
+
+        # Existing language code validations
+        # Validate metadata.languages
+        if self.metadata.languages:
+            for lang in self.metadata.languages:
+                code = lang.pt1 or lang.pt3  # Using correct attributes
+                if not self.validate_language_code(code):
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in metadata.languages: {code}",
+                            location="metadata.languages",
                         )
                     )
         # Validate source languages
         if self.metadata.source and self.metadata.source.languages:
             for lang in self.metadata.source.languages:
-                if not lang.pt1 and not lang.pt3:
+                code = lang.pt1 or lang.pt3  # Using correct attributes
+                if not self.validate_language_code(code):
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid language code in source: {lang}",
-                            location="Metadata.source.languages",
+                            message=f"Invalid language code in metadata.source.languages: {code}",
+                            location="metadata.source.languages",
                         )
                     )
+
         # Validate segment languages
         for idx, segment in enumerate(self.transcript.segments):
             if segment.language:
-                if not segment.language.pt1 and not segment.language.pt3:
+                code = (
+                    segment.language.pt1 or segment.language.pt3
+                )  # Using correct attributes
+                if not self.validate_language_code(code):
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid language code in segment",
+                            message=f"Invalid language code in segment: {code}",
                             location=f"Segment[{idx}] starting at {segment.start}",
                         )
                     )
@@ -941,13 +866,11 @@ class StandardTranscriptionJSON:
         """
         Validate speaker_id and style_id references in segments.
 
-        Checks that all speaker_id and style_id values in segments refer to valid speakers and styles.
-
-        Returns:
-            List[ValidationIssue]: List of validation issues related to speaker and style IDs.
+        Ensures that all speaker_id and style_id values in segments refer to
+        valid speakers and styles and conform to specified format constraints.
         """
         issues = []
-        # Collect valid speaker and style IDs for reference
+        # Collect valid speaker and style IDs
         valid_speaker_ids = {speaker.id for speaker in self.transcript.speakers}
         valid_style_ids = (
             {style.id for style in self.transcript.styles}
@@ -956,74 +879,124 @@ class StandardTranscriptionJSON:
         )
 
         for idx, segment in enumerate(self.transcript.segments):
-            if segment.speaker_id and segment.speaker_id not in valid_speaker_ids:
-                issues.append(
-                    ValidationIssue(
-                        message=f"Invalid speaker_id '{segment.speaker_id}'",
-                        location=f"Segment[{idx}] starting at {segment.start}",
+            # Validate speaker_id format and constraints
+            if segment.speaker_id:
+                # Check allowed characters and length
+                if not re.match(r"^[A-Za-z0-9_-]{1,64}$", segment.speaker_id):
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid speaker_id format: '{segment.speaker_id}'. Must be 1-64 characters long and contain only letters, digits, underscores, or hyphens.",
+                            location=f"Segment[{idx}].speaker_id",
+                        )
                     )
-                )
-            if segment.style_id and segment.style_id not in valid_style_ids:
-                issues.append(
-                    ValidationIssue(
-                        message=f"Invalid style_id '{segment.style_id}'",
-                        location=f"Segment[{idx}] starting at {segment.start}",
+                elif segment.speaker_id not in valid_speaker_ids:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"speaker_id '{segment.speaker_id}' does not exist in the speakers list.",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
                     )
-                )
+            # Validate style_id format and constraints
+            if segment.style_id:
+                # Check allowed characters and length
+                if not re.match(r"^[A-Za-z0-9_-]{1,64}$", segment.style_id):
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid style_id format: '{segment.style_id}'. Must be 1-64 characters long and contain only letters, digits, underscores, or hyphens.",
+                            location=f"Segment[{idx}].style_id",
+                        )
+                    )
+                elif segment.style_id not in valid_style_ids:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"style_id '{segment.style_id}' does not exist in the styles list.",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
         return issues
 
     def _validate_segments(self) -> List[ValidationIssue]:
-        """
-        Validate segments for ordering, overlapping, and word consistency.
-
-        Checks that segments are properly ordered, do not overlap, and have consistent word information.
-
-        Returns:
-            List[ValidationIssue]: List of validation issues related to segments.
-        """
+        """Validate segments according to STJ spec requirements."""
         issues = []
-        # Ensure segments are ordered and do not overlap
         previous_end = -1
-        for idx, segment in enumerate(self.transcript.segments):
-            if segment.start < previous_end:
+
+        # Check segments are ordered by start time and don't overlap
+        for i in range(len(self.transcript.segments)):
+            current = self.transcript.segments[i]
+
+            # Validate time format for start and end
+            issues.extend(
+                self._validate_time_format(current.start, f"Segment[{i}].start")
+            )
+            issues.extend(self._validate_time_format(current.end, f"Segment[{i}].end"))
+
+            # Check ordering and overlap
+            if i > 0:
+                previous = self.transcript.segments[i - 1]
+
+                # Ensure current segment starts after or at the end of the previous segment
+                if current.start < previous.start:
+                    issues.append(
+                        ValidationIssue(
+                            message="Segments must be ordered by start time",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+                elif current.start == previous.start and current.end < previous.end:
+                    issues.append(
+                        ValidationIssue(
+                            message="Segments with identical start times must be ordered by end time in ascending order",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+
+                # Check for overlap, allowing zero-duration segments to share timestamps
+                if current.start < previous.end and not (
+                    current.start
+                    == previous.end
+                    == current.end  # Allow zero-duration segments
+                ):
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Segments must not overlap. Previous segment ends at {previous.end}",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+
+            # Update 'previous_end' for the next iteration
+            previous_end = current.end
+
+            # Validate zero-duration segments
+            if current.start == current.end:
+                if not current.is_zero_duration:
+                    issues.append(
+                        ValidationIssue(
+                            message="Zero duration segment must have is_zero_duration set to true",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+                if current.words:
+                    issues.append(
+                        ValidationIssue(
+                            message="Zero duration segment must not have words array",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+                if current.word_timing_mode:
+                    issues.append(
+                        ValidationIssue(
+                            message="Zero duration segment must not specify word_timing_mode",
+                            location=f"Segment[{i}] starting at {current.start}",
+                        )
+                    )
+            elif current.is_zero_duration:
                 issues.append(
                     ValidationIssue(
-                        message="Segments overlap or are out of order",
-                        location=f"Segment[{idx}] starting at {segment.start}",
+                        message="Non-zero duration segment cannot have is_zero_duration set to true",
+                        location=f"Segment[{i}] starting at {current.start}",
                     )
                 )
-            if segment.start == segment.end:
-                segment_duration = segment.additional_info.get("segment_duration")
-                if segment_duration != SegmentDuration.ZERO.value:
-                    issues.append(
-                        ValidationIssue(
-                            message=f"Zero-duration segment without 'segment_duration' set to '{SegmentDuration.ZERO.value}'",
-                            location=f"Segment[{idx}] starting at {segment.start}",
-                        )
-                    )
-                elif segment_duration not in [e.value for e in SegmentDuration]:
-                    issues.append(
-                        ValidationIssue(
-                            message=f"Invalid 'segment_duration' value: {segment_duration}",
-                            location=f"Segment[{idx}] starting at {segment.start}",
-                        )
-                    )
-            # Validate word timing mode
-            word_timing_mode = segment.word_timing_mode
-            if word_timing_mode is not None:
-                if not isinstance(word_timing_mode, WordTimingMode):
-                    try:
-                        # Try to convert string to enum
-                        WordTimingMode(word_timing_mode)
-                    except ValueError:
-                        issues.append(
-                            ValidationIssue(
-                                message=f"Invalid word_timing_mode '{word_timing_mode}'",
-                                location=f"Segment[{idx}] starting at {segment.start}",
-                            )
-                        )
-            issues.extend(self._validate_words_in_segment(segment, idx))
-            previous_end = segment.end
+
         return issues
 
     def _validate_words_in_segment(
@@ -1045,6 +1018,25 @@ class StandardTranscriptionJSON:
         words = segment.words or []
         word_timing_mode = segment.word_timing_mode
 
+        # **New Validation Added Below**
+        if segment.is_zero_duration:
+            if words:
+                issues.append(
+                    ValidationIssue(
+                        message="Zero duration segment must not have words array",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
+                )
+            if word_timing_mode:
+                issues.append(
+                    ValidationIssue(
+                        message="Zero duration segment must not specify word_timing_mode",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
+                )
+            # No further word validations needed for zero-duration segments
+            return issues
+
         # Validate word timing mode
         if word_timing_mode is not None:
             if not isinstance(word_timing_mode, WordTimingMode):
@@ -1059,7 +1051,26 @@ class StandardTranscriptionJSON:
 
         # Set default word_timing_mode if none provided
         if word_timing_mode is None:
-            word_timing_mode = WordTimingMode.COMPLETE if words else WordTimingMode.NONE
+            if words:
+                # Determine if all words have timing
+                all_words_have_timing = all(
+                    word.start is not None and word.end is not None for word in words
+                )
+                if all_words_have_timing:
+                    word_timing_mode = WordTimingMode.COMPLETE
+                elif any(
+                    word.start is not None and word.end is not None for word in words
+                ):
+                    issues.append(
+                        ValidationIssue(
+                            message="Incomplete word timing data requires 'word_timing_mode' to be explicitly set to 'partial'",
+                            location=f"Segment[{segment_idx}] starting at {segment.start}",
+                        )
+                    )
+                else:
+                    word_timing_mode = WordTimingMode.NONE
+            else:
+                word_timing_mode = WordTimingMode.NONE
 
         if word_timing_mode != WordTimingMode.NONE and not words:
             issues.append(
@@ -1072,6 +1083,18 @@ class StandardTranscriptionJSON:
         previous_word_end = segment.start
         concatenated_words = ""
         for word_idx, word in enumerate(words):
+            # Add time format validation for word start and end times
+            issues.extend(
+                self._validate_time_format(
+                    word.start, f"Segment[{segment_idx}].Word[{word_idx}].start"
+                )
+            )
+            issues.extend(
+                self._validate_time_format(
+                    word.end, f"Segment[{segment_idx}].Word[{word_idx}].end"
+                )
+            )
+
             # Check if word timings are within segment timings
             if word.start < segment.start or word.end > segment.end:
                 issues.append(
@@ -1091,11 +1114,11 @@ class StandardTranscriptionJSON:
                 )
 
             if word.start == word.end:
-                word_duration = word.additional_info.get("word_duration")
+                word_duration = word.extensions.get("word_duration")
                 if word_duration != WordDuration.ZERO.value:
                     issues.append(
                         ValidationIssue(
-                            message=f"Zero-duration word without 'word_duration' set to '{WordDuration.ZERO.value}'",
+                            message=f"Zero-duration word must have 'word_duration' set to '{WordDuration.ZERO.value}'",
                             location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
                         )
                     )
@@ -1106,18 +1129,54 @@ class StandardTranscriptionJSON:
                             location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
                         )
                     )
+            else:
+                # **New Validation Added Here**
+                if "word_duration" in word.extensions:
+                    issues.append(
+                        ValidationIssue(
+                            message="word_duration should not be present for non-zero-duration words",
+                            location=f"Segment[{segment_idx}].Word[{word_idx}] starting at {word.start}",
+                        )
+                    )
 
             previous_word_end = word.end
             concatenated_words += word.text + " "
 
         if word_timing_mode == WordTimingMode.COMPLETE:
-            # Remove extra whitespace for comparison
-            segment_text = "".join(segment.text.split())
-            words_text = "".join(concatenated_words.strip().split())
+            # All words must have timing info
+            if not all(
+                word.start is not None and word.end is not None for word in words
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message="COMPLETE word timing mode requires timing for all words",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
+                )
+        elif word_timing_mode == WordTimingMode.PARTIAL:
+            # At least one word must have timing info
+            if not any(
+                word.start is not None and word.end is not None for word in words
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message="PARTIAL word timing mode requires timing for at least one word",
+                        location=f"Segment[{segment_idx}] starting at {segment.start}",
+                    )
+                )
+
+        if word_timing_mode == WordTimingMode.COMPLETE:
+            # Normalize texts by removing extra whitespace and punctuation
+            segment_text = re.sub(r"[^\w\s]", "", segment.text).lower()
+            segment_text = " ".join(segment_text.split())
+
+            words_text = re.sub(r"[^\w\s]", "", concatenated_words).lower()
+            words_text = " ".join(words_text.split())
+
             if segment_text != words_text:
                 issues.append(
                     ValidationIssue(
-                        message="Concatenated words do not match segment text",
+                        message=f"Segment text does not match concatenated word texts (ignoring whitespace/punctuation). Segment: '{segment.text}', Words: '{concatenated_words}'",
                         location=f"Segment[{segment_idx}] starting at {segment.start}",
                     )
                 )
@@ -1128,46 +1187,927 @@ class StandardTranscriptionJSON:
         """
         Validate confidence scores in segments and words.
 
-        Ensures that all confidence scores are within the valid range [0.0, 1.0].
+        Ensures that all confidence scores are within the valid range [0.0, 1.0] and have at most three decimal places.
 
         Returns:
             List[ValidationIssue]: List of validation issues related to confidence scores.
         """
+
+        def _has_at_most_three_decimals(value: float) -> bool:
+            """Check whether a float has at most three decimal places."""
+            str_value = (
+                f"{value:.10f}".rstrip("0").rstrip(".")
+                if "." in f"{value:.10f}"
+                else f"{value}"
+            )
+            if "." in str_value:
+                decimal_places = len(str_value.split(".")[1])
+                return decimal_places <= 3
+            return True
+
         issues = []
+
         for idx, segment in enumerate(self.transcript.segments):
-            if segment.confidence is not None and not (
-                0.0 <= segment.confidence <= 1.0
+            if segment.confidence is not None:
+                if not (0.0 <= segment.confidence <= 1.0):
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Segment confidence {segment.confidence} out of range [0.0, 1.0]",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
+
+                if not _has_at_most_three_decimals(segment.confidence):
+                    rounded_confidence = float(
+                        Decimal(str(segment.confidence)).quantize(
+                            Decimal("0.001"), rounding=ROUND_HALF_EVEN
+                        )
+                    )
+                    segment.confidence = rounded_confidence
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Segment confidence rounded to three decimal places: {segment.confidence}",
+                            location=f"Segment[{idx}] starting at {segment.start}",
+                        )
+                    )
+
+            for word_idx, word in enumerate(segment.words or []):
+                if word.confidence is not None:
+                    if not (0.0 <= word.confidence <= 1.0):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Word confidence {word.confidence} out of range [0.0, 1.0]",
+                                location=f"Segment[{idx}].Word[{word_idx}] starting at {word.start}",
+                            )
+                        )
+
+                    if not _has_at_most_three_decimals(word.confidence):
+                        rounded_word_confidence = float(
+                            Decimal(str(word.confidence)).quantize(
+                                Decimal("0.001"), rounding=ROUND_HALF_EVEN
+                            )
+                        )
+                        word.confidence = rounded_word_confidence
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Word confidence rounded to three decimal places: {word.confidence}",
+                                location=f"Segment[{idx}].Word[{word_idx}] starting at {word.start}",
+                            )
+                        )
+
+        return issues
+
+    def _validate_style_format(self) -> List[ValidationIssue]:
+        """Validate style format according to the specification."""
+        issues = []
+
+        if not self.transcript.styles:
+            return issues
+
+        VALID_TEXT_PROPERTIES = {
+            "color",  # RGB hex color (#RRGGBB)
+            "background",  # RGB hex color (#RRGGBB)
+            "bold",  # boolean
+            "italic",  # boolean
+            "underline",  # boolean
+            "size",  # percentage (e.g., "120%")
+            "opacity",  # percentage (e.g., "80%")
+        }
+
+        for idx, style in enumerate(self.transcript.styles):
+            # Validate required id field
+            if not style.id:
+                issues.append(
+                    ValidationIssue(
+                        message="Style ID is required and must be non-empty",
+                        location=f"Style[{idx}]",
+                    )
+                )
+
+            # Validate text properties
+            if style.text:
+                for key, value in style.text.items():
+                    if key not in VALID_TEXT_PROPERTIES:
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid text property: {key}",
+                                location=f"Style[{idx}].text",
+                            )
+                        )
+                    if key in {"bold", "italic", "underline"} and not isinstance(
+                        value, bool
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid {key} value: {value}. Must be boolean",
+                                location=f"Style[{idx}].text.{key}",
+                            )
+                        )
+                    if key in {"color", "background"} and not re.match(
+                        r"^#[0-9A-Fa-f]{6}$", str(value)
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid color format for {key}: {value}. Must be in #RRGGBB format",
+                                location=f"Style[{idx}].text.{key}",
+                            )
+                        )
+                    if key == "size":
+                        if not re.match(r"^\d+%$", str(value)):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Invalid size format: {value}. Must be percentage (e.g., '120%')",
+                                    location=f"Style[{idx}].text.size",
+                                )
+                            )
+                        else:
+                            size_value = int(value.rstrip("%"))
+                            if size_value <= 0:
+                                issues.append(
+                                    ValidationIssue(
+                                        message=f"'size' must be greater than 0%, got {value}",
+                                        location=f"Style[{idx}].text.size",
+                                    )
+                                )
+                    if key == "opacity":
+                        if not re.match(r"^\d+%$", str(value)):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Invalid opacity format: {value}. Must be percentage (e.g., '80%')",
+                                    location=f"Style[{idx}].text.opacity",
+                                )
+                            )
+                        else:
+                            opacity_value = int(value.rstrip("%"))
+                            if not (0 <= opacity_value <= 100):
+                                issues.append(
+                                    ValidationIssue(
+                                        message=f"'opacity' must be between 0% and 100%, got {value}",
+                                        location=f"Style[{idx}].text.opacity",
+                                    )
+                                )
+
+            # Validate display properties
+            if style.display:
+                if "align" in style.display and style.display["align"] not in {
+                    "left",
+                    "center",
+                    "right",
+                }:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid align value: {style.display['align']}",
+                            location=f"Style[{idx}].display.align",
+                        )
+                    )
+                if "vertical" in style.display and style.display["vertical"] not in {
+                    "top",
+                    "middle",
+                    "bottom",
+                }:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid vertical value: {style.display['vertical']}",
+                            location=f"Style[{idx}].display.vertical",
+                        )
+                    )
+                if "position" in style.display:
+                    pos = style.display["position"]
+                    if not isinstance(pos, dict) or "x" not in pos or "y" not in pos:
+                        issues.append(
+                            ValidationIssue(
+                                message="Position must contain 'x' and 'y' coordinates",
+                                location=f"Style[{idx}].display.position",
+                            )
+                        )
+                    else:
+                        for coord in ["x", "y"]:
+                            if not re.match(r"^\d+%$", str(pos[coord])):
+                                issues.append(
+                                    ValidationIssue(
+                                        message=f"Invalid {coord} position: {pos[coord]}. Must be percentage",
+                                        location=f"Style[{idx}].display.position.{coord}",
+                                    )
+                                )
+                            else:
+                                percent_value = int(pos[coord].rstrip("%"))
+                                if not (0 <= percent_value <= 100):
+                                    issues.append(
+                                        ValidationIssue(
+                                            message=f"'{coord}' position must be between 0% and 100%, got {pos[coord]}",
+                                            location=f"Style[{idx}].display.position.{coord}",
+                                        )
+                                    )
+
+            # Validate extensions for styles
+            if style.extensions:
+                issues.extend(
+                    self._validate_extensions(
+                        style.extensions, f"Style[{idx}].extensions"
+                    )
+                )
+
+        return issues
+
+    def _validate_extensions(
+        self, extensions: Dict[str, Any], location: str
+    ) -> List[ValidationIssue]:
+        """Validate extensions field according to specification."""
+        issues = []
+
+        RESERVED_NAMESPACES = {"stj", "webvtt", "ttml", "ssa", "srt", "dfxp", "smptett"}
+
+        if not isinstance(extensions, dict):
+            issues.append(
+                ValidationIssue(
+                    message="Extensions must be a dictionary", location=location
+                )
+            )
+            return issues
+
+        namespace_pattern = re.compile(r"^[a-z0-9\-]+$")
+
+        for namespace, value in extensions.items():
+            # Validate namespace naming convention
+            if not namespace_pattern.match(namespace):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid extension namespace '{namespace}'. Namespaces must be lowercase alphanumeric with optional hyphens.",
+                        location=f"{location}.{namespace}",
+                    )
+                )
+
+            if namespace in RESERVED_NAMESPACES:
+                issues.append(
+                    ValidationIssue(
+                        message=f"Reserved namespace '{namespace}' cannot be used",
+                        location=f"{location}.{namespace}",
+                    )
+                )
+
+            if not isinstance(value, dict):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Extension namespace '{namespace}' must contain a dictionary",
+                        location=f"{location}.{namespace}",
+                    )
+                )
+                continue  # Cannot traverse further if value is not a dict
+
+            # Recursively validate nested extensions if present
+            if "extensions" in value:
+                nested_extensions = value["extensions"]
+                nested_location = f"{location}.{namespace}.extensions"
+                issues.extend(
+                    self._validate_extensions(nested_extensions, nested_location)
+                )
+
+        return issues
+
+    def _validate_speaker_id(
+        self, speaker_id: str, location: str
+    ) -> List[ValidationIssue]:
+        """Validate speaker ID format according to specification."""
+        issues = []
+
+        if not re.match(r"^[A-Za-z0-9_-]{1,64}$", speaker_id):
+            issues.append(
+                ValidationIssue(
+                    message=f"Invalid speaker ID format: {speaker_id}. Must contain only letters, digits, underscores, or hyphens, with length between 1 and 64 characters.",
+                    location=location,
+                )
+            )
+
+        return issues
+
+    def _validate_version(self, version: str) -> List[ValidationIssue]:
+        """Validate STJ version format.
+
+        Ensures that the version follows the semantic versioning and is compatible with allowed versions.
+
+        """
+        issues = []
+
+        # Check semantic versioning format
+        semver_pattern = r"^\d+\.\d+\.\d+$"
+        if not re.match(semver_pattern, version):
+            issues.append(
+                ValidationIssue(
+                    message=f"Invalid version format: {version}. Must follow semantic versioning (e.g., 'x.y.z').",
+                    location="metadata.version",
+                )
+            )
+
+        # Check version compatibility
+        try:
+            major, minor, patch = map(int, version.split("."))
+            if major != 0 or minor < 5:
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid version: {version}. Must be '0.5.x' or higher.",
+                        location="metadata.version",
+                    )
+                )
+        except ValueError:
+            issues.append(
+                ValidationIssue(
+                    message=f"Version components must be integers: {version}.",
+                    location="metadata.version",
+                )
+            )
+
+        return issues
+
+    def _validate_uri(self, uri: str, location: str) -> List[ValidationIssue]:
+        issues = []
+        parsed = urlparse(uri)
+
+        # Validate scheme presence
+        if not parsed.scheme:
+            issues.append(
+                ValidationIssue(
+                    message="URI must include a scheme (e.g., http, https, file).",
+                    location=location,
+                )
+            )
+        else:
+            # Validate allowed schemes
+            allowed_schemes = ["http", "https", "file"]
+            if parsed.scheme not in allowed_schemes:
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid URI scheme '{parsed.scheme}'. Allowed schemes are: {', '.join(allowed_schemes)}.",
+                        location=location,
+                    )
+                )
+
+        # Validate netloc or path based on scheme
+        if parsed.scheme in ["http", "https"]:
+            if not parsed.netloc:
+                issues.append(
+                    ValidationIssue(
+                        message=f"{parsed.scheme.upper()} URI must include a network location (e.g., domain name).",
+                        location=location,
+                    )
+                )
+        elif parsed.scheme == "file":
+            if not parsed.path:
+                issues.append(
+                    ValidationIssue(
+                        message="File URI must include a valid file path.",
+                        location=location,
+                    )
+                )
+
+        # Validate overall URI conformity to RFC 3986
+        # Example: Check for prohibited characters
+        if re.search(r"[^\w\-\.~:/?#\[\]@!$&\'()*+,;=%]", uri):
+            issues.append(
+                ValidationIssue(
+                    message="URI contains invalid characters not allowed by RFC 3986.",
+                    location=location,
+                )
+            )
+
+        # Additional validations can be added here as needed
+
+        return issues
+
+    def _validate_zero_duration(
+        self, start: float, end: float, is_zero_duration: bool, location: str
+    ) -> List[ValidationIssue]:
+        """Validate zero duration handling."""
+        issues = []
+
+        if start == end and not is_zero_duration:
+            issues.append(
+                ValidationIssue(
+                    message="Zero duration item must have is_zero_duration set to true",
+                    location=location,
+                )
+            )
+        elif start != end and is_zero_duration:
+            issues.append(
+                ValidationIssue(
+                    message="Non-zero duration item cannot have is_zero_duration set to true",
+                    location=location,
+                )
+            )
+
+        return issues
+
+    def _validate_style_id(self, style_id: str, location: str) -> List[ValidationIssue]:
+        """Validate style ID format according to specification."""
+        issues = []
+
+        if not re.match(r"^[A-Za-z0-9_-]{1,64}$", style_id):
+            issues.append(
+                ValidationIssue(
+                    message=f"Invalid style ID format: {style_id}. Must contain only letters, digits, underscores, or hyphens, with length between 1 and 64 characters.",
+                    location=location,
+                )
+            )
+
+        return issues
+
+    def _validate_required_fields(self) -> List[ValidationIssue]:
+        """Validate the presence and content of required metadata fields."""
+        issues = []
+
+        metadata = self.metadata
+
+        # Validate transcriber.name
+        if not metadata.transcriber.name or not isinstance(
+            metadata.transcriber.name, str
+        ):
+            issues.append(
+                ValidationIssue(
+                    message="Missing or invalid 'transcriber.name'. It must be a non-empty string.",
+                    location="metadata.transcriber.name",
+                )
+            )
+
+        # Validate transcriber.version
+        if not metadata.transcriber.version or not isinstance(
+            metadata.transcriber.version, str
+        ):
+            issues.append(
+                ValidationIssue(
+                    message="Missing or invalid 'transcriber.version'. It must be a non-empty string.",
+                    location="metadata.transcriber.version",
+                )
+            )
+
+        # Validate created_at
+        if not metadata.created_at or not isinstance(metadata.created_at, datetime):
+            issues.append(
+                ValidationIssue(
+                    message="Missing or invalid 'created_at'. It must be a valid datetime object.",
+                    location="metadata.created_at",
+                )
+            )
+        else:
+            # Ensure created_at is timezone-aware
+            if metadata.created_at.tzinfo is None:
+                issues.append(
+                    ValidationIssue(
+                        message="'created_at' must be timezone-aware.",
+                        location="metadata.created_at",
+                    )
+                )
+
+        # Validate version
+        if not metadata.version or not isinstance(metadata.version, str):
+            issues.append(
+                ValidationIssue(
+                    message="Missing or invalid 'metadata.version'. It must be a non-empty string.",
+                    location="metadata.version",
+                )
+            )
+        else:
+            # Validate semantic versioning
+            if not re.match(r"^\d+\.\d+\.\d+$", metadata.version):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Invalid 'metadata.version' format: {metadata.version}. Must follow semantic versioning (e.g., 'x.y.z').",
+                        location="metadata.version",
+                    )
+                )
+            else:
+                # Check version compatibility as per specification
+                major, minor, patch = map(int, metadata.version.split("."))
+                if major != 0 or minor < 5:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid 'metadata.version': {metadata.version}. Must be '0.5.x' or higher.",
+                            location="metadata.version",
+                        )
+                    )
+
+        return issues
+
+    def _validate_types(self) -> List[ValidationIssue]:
+        """
+        Validate the types of all fields in the STJ data according to the schema.
+
+        Returns:
+            List[ValidationIssue]: A list of issues found during type validation.
+        """
+        issues = []
+
+        for idx, segment in enumerate(self.transcript.segments):
+            # Validate start and end are numbers
+            if not isinstance(segment.start, (int, float)):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].start must be a number.",
+                        location=f"Segment[{idx}].start",
+                    )
+                )
+            if not isinstance(segment.end, (int, float)):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].end must be a number.",
+                        location=f"Segment[{idx}].end",
+                    )
+                )
+
+            # Validate confidence is a number if present
+            if segment.confidence is not None and not isinstance(
+                segment.confidence, (int, float)
             ):
                 issues.append(
                     ValidationIssue(
-                        message=f"Segment confidence {segment.confidence} out of range [0.0, 1.0]",
-                        location=f"Segment[{idx}] starting at {segment.start}",
+                        message=f"Segment[{idx}].confidence must be a number.",
+                        location=f"Segment[{idx}].confidence",
                     )
                 )
-            for word_idx, word in enumerate(segment.words or []):
-                if word.confidence is not None and not (0.0 <= word.confidence <= 1.0):
+
+            # Validate speaker_id is a string if present
+            if segment.speaker_id is not None and not isinstance(
+                segment.speaker_id, str
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].speaker_id must be a string.",
+                        location=f"Segment[{idx}].speaker_id",
+                    )
+                )
+
+            # Validate style_id is a string if present
+            if segment.style_id is not None and not isinstance(segment.style_id, str):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].style_id must be a string.",
+                        location=f"Segment[{idx}].style_id",
+                    )
+                )
+
+            # Validate words is a list if present
+            if segment.words is not None:
+                if not isinstance(segment.words, list):
                     issues.append(
                         ValidationIssue(
-                            message=f"Word confidence {word.confidence} out of range [0.0, 1.0]",
-                            location=f"Segment[{idx}].Word[{word_idx}] starting at {word.start}",
+                            message=f"Segment[{idx}].words must be a list.",
+                            location=f"Segment[{idx}].words",
                         )
                     )
+                else:
+                    for word_idx, word in enumerate(segment.words):
+                        if not isinstance(word.start, (int, float)):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Segment[{idx}].words[{word_idx}].start must be a number.",
+                                    location=f"Segment[{idx}].words[{word_idx}].start",
+                                )
+                            )
+                        if not isinstance(word.end, (int, float)):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Segment[{idx}].words[{word_idx}].end must be a number.",
+                                    location=f"Segment[{idx}].words[{word_idx}].end",
+                                )
+                            )
+                        if not isinstance(word.text, str):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Segment[{idx}].words[{word_idx}].text must be a string.",
+                                    location=f"Segment[{idx}].words[{word_idx}].text",
+                                )
+                            )
+                        if word.confidence is not None and not isinstance(
+                            word.confidence, (int, float)
+                        ):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Segment[{idx}].words[{word_idx}].confidence must be a number.",
+                                    location=f"Segment[{idx}].words[{word_idx}].confidence",
+                                )
+                            )
+                        # Removed the check for word.word_timing_mode
+
+                        # Validate extensions is a dict if present
+                        if word.extensions is not None and not isinstance(
+                            word.extensions, dict
+                        ):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"Segment[{idx}].words[{word_idx}].extensions must be a dictionary.",
+                                    location=f"Segment[{idx}].words[{word_idx}].extensions",
+                                )
+                            )
+
+            # Validate language is a string if present
+            if segment.language is not None and not isinstance(segment.language, str):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].language must be a string.",
+                        location=f"Segment[{idx}].language",
+                    )
+                )
+
+            # Validate word_timing_mode is a string if present
+            if segment.word_timing_mode is not None and not isinstance(
+                segment.word_timing_mode, str
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].word_timing_mode must be a string.",
+                        location=f"Segment[{idx}].word_timing_mode",
+                    )
+                )
+
+            # Validate is_zero_duration is a bool
+            if not isinstance(segment.is_zero_duration, bool):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].is_zero_duration must be a boolean.",
+                        location=f"Segment[{idx}].is_zero_duration",
+                    )
+                )
+
+            # Validate extensions is a dict if present
+            if segment.extensions is not None and not isinstance(
+                segment.extensions, dict
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message=f"Segment[{idx}].extensions must be a dictionary.",
+                        location=f"Segment[{idx}].extensions",
+                    )
+                )
+
+        # Validate metadata fields
+        if not isinstance(self.metadata.transcriber.name, str):
+            issues.append(
+                ValidationIssue(
+                    message="metadata.transcriber.name must be a string.",
+                    location="metadata.transcriber.name",
+                )
+            )
+        if not isinstance(self.metadata.transcriber.version, str):
+            issues.append(
+                ValidationIssue(
+                    message="metadata.transcriber.version must be a string.",
+                    location="metadata.transcriber.version",
+                )
+            )
+        if not isinstance(self.metadata.created_at, datetime):  # Changed from str to datetime
+            issues.append(
+                ValidationIssue(
+                    message="metadata.created_at must be a datetime object.",  # Updated message
+                    location="metadata.created_at",
+                )
+            )
+        if not isinstance(self.metadata.version, str):
+            issues.append(
+                ValidationIssue(
+                    message="metadata.version must be a string.",
+                    location="metadata.version",
+                )
+            )
+        if self.metadata.source is not None:
+            if not isinstance(self.metadata.source.uri, str):
+                issues.append(
+                    ValidationIssue(
+                        message="metadata.source.uri must be a string.",
+                        location="metadata.source.uri",
+                    )
+                )
+            if self.metadata.source.duration is not None and not isinstance(
+                self.metadata.source.duration, (int, float)
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message="metadata.source.duration must be a number.",
+                        location="metadata.source.duration",
+                    )
+                )
+            if self.metadata.source.languages is not None:
+                if not isinstance(self.metadata.source.languages, list):
+                    issues.append(
+                        ValidationIssue(
+                            message="metadata.source.languages must be a list of strings.",
+                            location="metadata.source.languages",
+                        )
+                    )
+                else:
+                    for lang_idx, lang in enumerate(self.metadata.source.languages):
+                        if not isinstance(lang, str):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"metadata.source.languages[{lang_idx}] must be a string.",
+                                    location=f"metadata.source.languages[{lang_idx}]",
+                                )
+                            )
+            if self.metadata.languages is not None:
+                if not isinstance(self.metadata.languages, list):
+                    issues.append(
+                        ValidationIssue(
+                            message="metadata.languages must be a list of strings.",
+                            location="metadata.languages",
+                        )
+                    )
+                else:
+                    for lang_idx, lang in enumerate(self.metadata.languages):
+                        if not isinstance(lang, str):
+                            issues.append(
+                                ValidationIssue(
+                                    message=f"metadata.languages[{lang_idx}] must be a string.",
+                                    location=f"metadata.languages[{lang_idx}]",
+                                )
+                            )
+            if self.metadata.confidence_threshold is not None and not isinstance(
+                self.metadata.confidence_threshold, (int, float)
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message="metadata.confidence_threshold must be a number.",
+                        location="metadata.confidence_threshold",
+                    )
+                )
+            if self.metadata.extensions is not None and not isinstance(
+                self.metadata.extensions, dict
+            ):
+                issues.append(
+                    ValidationIssue(
+                        message="metadata.extensions must be a dictionary.",
+                        location="metadata.extensions",
+                    )
+                )
+
+        # Validate speakers
+        if self.transcript.speakers:
+            if not isinstance(self.transcript.speakers, list):
+                issues.append(
+                    ValidationIssue(
+                        message="transcript.speakers must be a list.",
+                        location="transcript.speakers",
+                    )
+                )
+            else:
+                for speaker_idx, speaker in enumerate(self.transcript.speakers):
+                    if not isinstance(speaker.id, str):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.speakers[{speaker_idx}].id must be a string.",
+                                location=f"transcript.speakers[{speaker_idx}].id",
+                            )
+                        )
+                    if speaker.name is not None and not isinstance(speaker.name, str):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.speakers[{speaker_idx}].name must be a string.",
+                                location=f"transcript.speakers[{speaker_idx}].name",
+                            )
+                        )
+                    if speaker.extensions is not None and not isinstance(
+                        speaker.extensions, dict
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.speakers[{speaker_idx}].extensions must be a dictionary.",
+                                location=f"transcript.speakers[{speaker_idx}].extensions",
+                            )
+                        )
+
+        # Validate styles
+        if self.transcript.styles:
+            if not isinstance(self.transcript.styles, list):
+                issues.append(
+                    ValidationIssue(
+                        message="transcript.styles must be a list.",
+                        location="transcript.styles",
+                    )
+                )
+            else:
+                for style_idx, style in enumerate(self.transcript.styles):
+                    if not isinstance(style.id, str):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.styles[{style_idx}].id must be a string.",
+                                location=f"transcript.styles[{style_idx}].id",
+                            )
+                        )
+                    if style.text is not None and not isinstance(style.text, dict):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.styles[{style_idx}].text must be a dictionary.",
+                                location=f"transcript.styles[{style_idx}].text",
+                            )
+                        )
+                    if style.display is not None and not isinstance(
+                        style.display, dict
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.styles[{style_idx}].display must be a dictionary.",
+                                location=f"transcript.styles[{style_idx}].display",
+                            )
+                        )
+                    if style.extensions is not None and not isinstance(
+                        style.extensions, dict
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"transcript.styles[{style_idx}].extensions must be a dictionary.",
+                                location=f"transcript.styles[{style_idx}].extensions",
+                            )
+                        )
+
+                    # Validate extensions for styles
+                    if style.extensions:
+                        issues.extend(
+                            self._validate_extensions(
+                                style.extensions, f"Style[{idx}].extensions"
+                            )
+                        )
+
+        # Validate transcript nested objects if any other type validations are needed
+
         return issues
 
+    def _validate_time_format(
+        self, time_value: float, location: str
+    ) -> List[ValidationIssue]:
+        """Validate time value according to STJ spec requirements."""
+        issues = []
 
+        # Must be non-negative
+        if time_value < 0:
+            issues.append(
+                ValidationIssue(
+                    message=f"Time value must be non-negative, got {time_value}",
+                    location=location,
+                )
+            )
 
+        # Must not exceed 999999.999
+        if time_value > 999999.999:
+            issues.append(
+                ValidationIssue(
+                    message=f"Time value exceeds maximum allowed (999999.999), got {time_value}",
+                    location=location,
+                )
+            )
 
+        # Check decimal precision (max 3 places)
+        str_value = str(time_value)
+        if "." in str_value:
+            decimals = len(str_value.split(".")[1])
+            if decimals > 3:
+                issues.append(
+                    ValidationIssue(
+                        message=f"Time value has too many decimal places (max 3), got {decimals}",
+                        location=location,
+                    )
+                )
 
+        return issues
 
+    def validate_language_code(self, code: str) -> bool:
+        """
+        Validate that the language code follows STJ spec requirements:
+        - Must use ISO 639-1 (2-letter) when available
+        - Can only use ISO 639-3 (3-letter) for languages without ISO 639-1 codes
+        """
+        if not code or not isinstance(code, str):
+            return False
 
+        try:
+            # Try to get language entry from the code
+            lang = Lang(code)  # Use Lang directly instead of Language.from_part1/3
 
+            # If it's a 3-letter code but has a 2-letter equivalent, it's invalid per spec
+            if len(code) == 3 and lang.pt1:  # Use pt1 instead of part1
+                return False
 
+            return True
+        except (KeyError, InvalidLanguageValue):  # Use InvalidLanguageValue from iso639.exceptions
+            return False
 
+    # Add this method to handle deserialization of languages
+    @classmethod
+    def _deserialize_languages(cls, languages_data: Optional[List[str]]) -> List[Lang]:
+        """Deserialize languages from a list of language codes.
 
+        Args:
+            languages_data (Optional[List[str]]): List of language codes to deserialize.
 
+        Returns:
+            List[Lang]: List of Lang objects. Invalid codes are skipped.
+        """
+        if not languages_data:
+            return []
 
+        languages = []
+        for code in languages_data:
+            try:
+                # Attempt to create a Lang object from the code
+                lang = Lang(code)
+                languages.append(lang)
+            except InvalidLanguageValue:
+                # Skip invalid language codes
+                continue
 
-
-
-
-
+        return languages
