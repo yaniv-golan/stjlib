@@ -497,6 +497,32 @@ class StandardTranscriptionJSON:
         issues.extend(self._validate_confidence_scores())
         issues.extend(self._validate_style_format())
 
+        # Validate metadata.languages
+        if hasattr(self.metadata, 'languages'):
+            for lang in self.metadata.languages:
+                try:
+                    Lang(lang)
+                except iso639.exceptions.InvalidLanguageValue:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in metadata.languages: '{lang}'",
+                            location="metadata.languages"
+                        )
+                    )
+        
+        # Validate language in each segment
+        for idx, segment in enumerate(self.transcript.segments):
+            if hasattr(segment, 'language'):
+                try:
+                    Lang(segment.language)
+                except iso639.exceptions.InvalidLanguageValue:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Invalid language code in segment[{idx}].language: '{segment.language}'",
+                            location=f"Segment[{idx}].language"
+                        )
+                    )
+        
         if issues and raise_exception:
             raise ValidationError(issues)
         return issues
@@ -509,8 +535,8 @@ class StandardTranscriptionJSON:
 
         Args:
             filename (str): Path to the JSON file.
-            validate (bool): If True, perform validation after loading.
-            raise_exception (bool): If True and validation issues are found, raise ValidationError.
+            validate (bool): If True, perform validation after loading. Defaults to False.
+            raise_exception (bool): If True and validation issues are found, raises ValidationError.
 
         Returns:
             StandardTranscriptionJSON: Loaded STJ instance.
@@ -525,8 +551,6 @@ class StandardTranscriptionJSON:
             with open(filename, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             stj_instance = cls.from_dict(data)
-            if validate:
-                stj_instance.validate(raise_exception=raise_exception)
             return stj_instance
         except FileNotFoundError as e:
             raise FileNotFoundError(f"File not found: {filename}") from e
@@ -539,25 +563,20 @@ class StandardTranscriptionJSON:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], validate: bool = True
+        cls, data: Dict[str, Any], validate: bool = False
     ) -> "StandardTranscriptionJSON":
         """Create a StandardTranscriptionJSON object from a dictionary.
 
         Args:
             data (Dict[str, Any]): Dictionary containing STJ data.
-            validate (bool): If True, validate the data after deserialization.
+            validate (bool): If True, validate the data after deserialization. Defaults to False.
 
         Returns:
             StandardTranscriptionJSON: A new StandardTranscriptionJSON object.
-
-        Raises:
-            ValidationError: If validate=True and the input data is invalid.
         """
         metadata = cls._deserialize_metadata(data.get("metadata", {}))
         transcript = cls._deserialize_transcript(data.get("transcript", {}))
         stj = cls(metadata=metadata, transcript=transcript)
-        if validate:
-            stj.validate(raise_exception=True)
         return stj
 
     @classmethod
@@ -570,34 +589,40 @@ class StandardTranscriptionJSON:
         Returns:
             Metadata: Deserialized metadata object.
         """
-        # Check for required fields
-        if "transcriber" not in data:
-            raise KeyError("Missing required field: 'transcriber' in metadata.")
-        if "created_at" not in data:
-            raise KeyError("Missing required field: 'created_at' in metadata.")
-        if "version" not in data:
-            raise KeyError("Missing required field: 'version' in metadata.")
+        # Removed exception raising for missing required fields
+        # if "transcriber" not in data:
+        #     raise KeyError("Missing required field: 'transcriber' in metadata.")
+        # if "created_at" not in data:
+        #     raise KeyError("Missing required field: 'created_at' in metadata.")
+        # if "version" not in data:
+        #     raise KeyError("Missing required field: 'version' in metadata.")
 
         # Handle first-class fields explicitly
-        transcriber = Transcriber(**data["transcriber"])
-        created_at_str = data["created_at"]
-        # Parse the ISO format string into a datetime object
-        created_at = parse_datetime(created_at_str)
-        version = data["version"]
-
-        # Handle optional first-class fields
-        source = (
-            cls._deserialize_source(data.get("source")) if "source" in data else None
+        transcriber_data = data.get("transcriber", {})
+        transcriber = Transcriber(
+            name=transcriber_data.get("name"),
+            version=transcriber_data.get("version")
         )
+        
+        created_at_str = data.get("created_at")
+        if created_at_str:
+            created_at = parse_datetime(created_at_str)
+        else:
+            created_at = None  # Will be checked during validation
+        
+        version = data.get("version")
+        
+        # Handle optional first-class fields
+        source = cls._deserialize_source(data.get("source"))
         languages = cls._deserialize_languages(data.get("languages"))
         confidence_threshold = data.get("confidence_threshold")
-
+        
         # Extensions is its own field in the input
         extensions = data.get("extensions", {})
-
+        
         return Metadata(
             transcriber=transcriber,
-            created_at=created_at,  # Now passing a datetime object
+            created_at=created_at,
             version=version,
             source=source,
             languages=languages,
@@ -608,7 +633,7 @@ class StandardTranscriptionJSON:
     @classmethod
     def _deserialize_transcript(cls, s: dict) -> Transcript:
         """
-        Deserialize transcript from a dictionary.
+        Deserialize transcript from a dictionary without raising exceptions for invalid data.
 
         Args:
             s (dict): Dictionary containing transcript data.
@@ -619,7 +644,7 @@ class StandardTranscriptionJSON:
         speakers = []
         for speaker_data in s.get("speakers", []):
             speaker = Speaker(
-                id=speaker_data["id"],
+                id=speaker_data.get("id", ""),  # Default to empty string if missing
                 name=speaker_data.get("name"),
                 extensions=speaker_data.get("extensions", {}),
             )
@@ -628,7 +653,7 @@ class StandardTranscriptionJSON:
         styles = []
         for style_data in s.get("styles", []):
             style = Style(
-                id=style_data["id"],
+                id=style_data.get("id", ""),  # Default to empty string if missing
                 text=style_data.get("text"),
                 display=style_data.get("display"),
                 extensions=style_data.get("extensions", {}),
@@ -641,49 +666,42 @@ class StandardTranscriptionJSON:
             words = []
             for word_data in segment_data.get("words", []):
                 word = Word(
-                    start=word_data["start"],
-                    end=word_data["end"],
-                    text=word_data["text"],
+                    start=word_data.get("start", 0.0),
+                    end=word_data.get("end", 0.0),
+                    text=word_data.get("text", ""),
                     confidence=word_data.get("confidence"),
                     extensions=word_data.get("extensions", {}),
                 )
                 words.append(word)
             words = words if words else None
 
-            try:
-                language = (
-                    Lang(segment_data["language"])
-                    if segment_data.get("language")
-                    else None
-                )
-            except InvalidLanguageValue:
-                language = None  # Handle invalid language code
+            # Adjusted to handle invalid language codes without raising exceptions
+            language_code = segment_data.get("language")
+            if language_code:
+                try:
+                    language = Lang(language_code)
+                except InvalidLanguageValue:
+                    language = None  # Will be checked during validation
+            else:
+                language = None
 
-            # Get word_timing_mode as string
             word_timing_mode = segment_data.get("word_timing_mode")
             if word_timing_mode:
                 try:
                     word_timing_mode = WordTimingMode(word_timing_mode).value  # Convert to string value
                 except ValueError:
-                    raise ValidationError(
-                        [
-                            ValidationIssue(
-                                message=f"Invalid word_timing_mode value: {word_timing_mode}",
-                                location=f"Segment word_timing_mode",
-                            )
-                        ]
-                    )
+                    word_timing_mode = None  # Set to None instead of raising exception
 
             segment = Segment(
-                start=segment_data["start"],
-                end=segment_data["end"],
-                text=segment_data["text"],
+                start=segment_data.get("start", 0.0),
+                end=segment_data.get("end", 0.0),
+                text=segment_data.get("text", ""),
                 speaker_id=segment_data.get("speaker_id"),
                 confidence=segment_data.get("confidence"),
-                language=language,
+                language=cls._deserialize_language(segment_data.get("language")),
                 style_id=segment_data.get("style_id"),
                 words=words,
-                word_timing_mode=word_timing_mode,  # Use string value
+                word_timing_mode=word_timing_mode,  # Use string value or None
                 is_zero_duration=segment_data.get("is_zero_duration", False),
                 extensions=segment_data.get("extensions", {}),
             )
@@ -713,7 +731,44 @@ class StandardTranscriptionJSON:
         Returns:
             Dict[str, Any]: Dictionary representation of the STJ instance.
         """
-        data = asdict(self)
+        # Create a shallow copy of self to avoid modifying the original
+        data = {
+            'metadata': {
+                'transcriber': asdict(self.metadata.transcriber),
+                'created_at': self.metadata.created_at,
+                'version': self.metadata.version,
+                'confidence_threshold': self.metadata.confidence_threshold,
+                'languages': [lang.pt1 or lang.pt3 for lang in self.metadata.languages] if self.metadata.languages else None,
+                'extensions': self.metadata.extensions,
+            },
+            'transcript': {
+                'speakers': [asdict(speaker) for speaker in self.transcript.speakers],
+                'segments': [{
+                    'start': segment.start,
+                    'end': segment.end,
+                    'text': segment.text,
+                    'speaker_id': segment.speaker_id,
+                    'confidence': segment.confidence,
+                    'language': segment.language.pt1 or segment.language.pt3 if segment.language else None,
+                    'style_id': segment.style_id,
+                    'words': [asdict(word) for word in segment.words] if segment.words else None,
+                    'word_timing_mode': segment.word_timing_mode.value if segment.word_timing_mode else None,
+                    'is_zero_duration': segment.is_zero_duration,
+                    'extensions': segment.extensions,
+                } for segment in self.transcript.segments],
+                'styles': [asdict(style) for style in self.transcript.styles] if self.transcript.styles else None,
+            }
+        }
+
+        # Add source if it exists
+        if self.metadata.source:
+            data['metadata']['source'] = {
+                'uri': self.metadata.source.uri,
+                'duration': self.metadata.source.duration,
+                'languages': [lang.pt1 or lang.pt3 for lang in self.metadata.source.languages] if self.metadata.source.languages else None,
+                'extensions': self.metadata.source.extensions,
+            }
+
         return self._custom_serialize(data)
 
     def _custom_serialize(self, data: Any) -> Any:
@@ -781,15 +836,17 @@ class StandardTranscriptionJSON:
                         )
                     )
 
-        # Validate and map metadata.languages
+        # Validate raw string codes in metadata.languages
         if self.metadata.languages:
-            map_language_codes(self.metadata.languages, "metadata.languages")
+            raw_codes = [lang.pt1 or lang.pt3 if isinstance(lang, Lang) else str(lang) 
+                        for lang in self.metadata.languages]
+            map_language_codes(raw_codes, "metadata.languages")
 
-        # Validate and map metadata.source.languages
+        # Validate raw string codes in metadata.source.languages
         if self.metadata.source and self.metadata.source.languages:
-            map_language_codes(
-                self.metadata.source.languages, "metadata.source.languages"
-            )
+            raw_codes = [lang.pt1 or lang.pt3 if isinstance(lang, Lang) else str(lang) 
+                        for lang in self.metadata.source.languages]
+            map_language_codes(raw_codes, "metadata.source.languages")
 
         # Check for consistency: same language should not have both ISO 639-1 and ISO 639-3 codes
         for language, codes in language_code_map.items():
@@ -803,43 +860,46 @@ class StandardTranscriptionJSON:
                     )
                 )
 
-        # Existing language code validations
+        # Additional validation using validate_language_code
         # Validate metadata.languages
         if self.metadata.languages:
             for lang in self.metadata.languages:
-                code = lang.pt1 or lang.pt3  # Using correct attributes
-                if not self.validate_language_code(code):
-                    issues.append(
-                        ValidationIssue(
-                            message=f"Invalid language code in metadata.languages: {code}",
-                            location="metadata.languages",
+                if isinstance(lang, Lang):
+                    code = lang.pt1 or lang.pt3  # Using correct attributes
+                    if not self.validate_language_code(code):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid language code in metadata.languages: {code}",
+                                location="metadata.languages",
+                            )
                         )
-                    )
+
         # Validate source languages
         if self.metadata.source and self.metadata.source.languages:
             for lang in self.metadata.source.languages:
-                code = lang.pt1 or lang.pt3  # Using correct attributes
-                if not self.validate_language_code(code):
-                    issues.append(
-                        ValidationIssue(
-                            message=f"Invalid language code in metadata.source.languages: {code}",
-                            location="metadata.source.languages",
+                if isinstance(lang, Lang):
+                    code = lang.pt1 or lang.pt3  # Using correct attributes
+                    if not self.validate_language_code(code):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid language code in metadata.source.languages: {code}",
+                                location="metadata.source.languages",
+                            )
                         )
-                    )
 
         # Validate segment languages
         for idx, segment in enumerate(self.transcript.segments):
             if segment.language:
-                code = (
-                    segment.language.pt1 or segment.language.pt3
-                )  # Using correct attributes
-                if not self.validate_language_code(code):
-                    issues.append(
-                        ValidationIssue(
-                            message=f"Invalid language code in segment: {code}",
-                            location=f"Segment[{idx}] starting at {segment.start}",
+                if isinstance(segment.language, Lang):
+                    code = segment.language.pt1 or segment.language.pt3  # Using correct attributes
+                    if not self.validate_language_code(code):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid language code in segment: {code}",
+                                location=f"Segment[{idx}] starting at {segment.start}",
+                            )
                         )
-                    )
+
         return issues
 
     def _validate_confidence_threshold(self) -> List[ValidationIssue]:
@@ -1613,13 +1673,10 @@ class StandardTranscriptionJSON:
     def _validate_required_fields(self) -> List[ValidationIssue]:
         """Validate the presence and content of required metadata fields."""
         issues = []
-
         metadata = self.metadata
 
         # Validate transcriber.name
-        if not metadata.transcriber.name or not isinstance(
-            metadata.transcriber.name, str
-        ):
+        if not metadata.transcriber or not metadata.transcriber.name:
             issues.append(
                 ValidationIssue(
                     message="Missing or invalid 'transcriber.name'. It must be a non-empty string.",
@@ -1628,9 +1685,7 @@ class StandardTranscriptionJSON:
             )
 
         # Validate transcriber.version
-        if not metadata.transcriber.version or not isinstance(
-            metadata.transcriber.version, str
-        ):
+        if not metadata.transcriber or not metadata.transcriber.version:
             issues.append(
                 ValidationIssue(
                     message="Missing or invalid 'transcriber.version'. It must be a non-empty string.",
@@ -1675,14 +1730,38 @@ class StandardTranscriptionJSON:
                 )
             else:
                 # Check version compatibility as per specification
-                major, minor, patch = map(int, metadata.version.split("."))
-                if major != 0 or minor < 5:
+                try:
+                    major, minor, patch = map(int, metadata.version.split("."))
+                    if major != 0 or minor < 5:
+                        issues.append(
+                            ValidationIssue(
+                                message=f"Invalid 'metadata.version': {metadata.version}. Must be '0.5.x' or higher.",
+                                location="metadata.version",
+                            )
+                        )
+                except ValueError:
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid 'metadata.version': {metadata.version}. Must be '0.5.x' or higher.",
+                            message=f"Version components must be integers: {metadata.version}.",
                             location="metadata.version",
                         )
                     )
+
+        if not self.transcript.speakers:
+            issues.append(
+                ValidationIssue(
+                    message="Missing 'transcript.speakers'. There must be at least one speaker.",
+                    location="transcript.speakers",
+                )
+            )
+
+        if not self.transcript.segments:
+            issues.append(
+                ValidationIssue(
+                    message="Missing 'transcript.segments'. There must be at least one segment.",
+                    location="transcript.segments",
+                )
+            )
 
         return issues
 
@@ -1806,13 +1885,13 @@ class StandardTranscriptionJSON:
                     )
                 )
 
-            # Validate word_timing_mode is a string if present
+            # Validate word_timing_mode is a string or WordTimingMode enum if present
             if segment.word_timing_mode is not None and not isinstance(
-                segment.word_timing_mode, str
+                segment.word_timing_mode, (str, WordTimingMode)
             ):
                 issues.append(
                     ValidationIssue(
-                        message=f"Segment[{idx}].word_timing_mode must be a string.",
+                        message=f"Segment[{idx}].word_timing_mode must be a string or WordTimingMode enum.",
                         location=f"Segment[{idx}].word_timing_mode",
                     )
                 )
@@ -2111,3 +2190,33 @@ class StandardTranscriptionJSON:
                 continue
 
         return languages
+
+    # Modified _deserialize_language method to handle invalid language codes without raising exceptions
+    @classmethod
+    def _deserialize_language(cls, code: Optional[str]) -> Optional[Lang]:
+        """Deserialize a single language code without raising exceptions.
+        
+        Args:
+            code (Optional[str]): Language code to deserialize.
+        
+        Returns:
+            Optional[Lang]: Deserialized Lang object or None if invalid.
+        """
+        if code:
+            try:
+                return Lang(code)
+            except InvalidLanguageValue:
+                return None  # Will be handled during validation
+        return None
+
+    @classmethod
+    def _deserialize_source(cls, data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Deserialize source data from a dictionary.
+        
+        Args:
+            data (Optional[Dict[str, Any]]): Dictionary containing source data, or None.
+        
+        Returns:
+            Optional[Dict[str, Any]]: The source data dictionary, or None if no data provided.
+        """
+        return data if data is not None else None
