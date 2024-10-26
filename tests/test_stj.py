@@ -249,7 +249,7 @@ def test_serialization():
         "metadata": {
             "transcriber": {"name": "TestTranscriber", "version": "1.0"},
             "version": "0.5.0",
-            "created_at": "2023-01-01T00:00:00+00:00",
+            "created_at": "2023-01-01T00:00:00Z",  # Changed from +00:00 to Z
             "confidence_threshold": 0.8,
             "languages": ["en", "es"],
             "extensions": {},
