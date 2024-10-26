@@ -210,8 +210,8 @@ class Metadata:
             created_at = datetime.fromisoformat(created_at_str)
         except ValueError:
             # If direct parsing fails, try converting 'Z' to '+00:00'
-            if created_at_str.endswith('Z'):
-                created_at = datetime.fromisoformat(created_at_str[:-1] + '+00:00')
+            if created_at_str.endswith("Z"):
+                created_at = datetime.fromisoformat(created_at_str[:-1] + "+00:00")
             else:
                 raise
 
@@ -235,10 +235,10 @@ class Metadata:
             "transcriber": self.transcriber.to_dict(),
             "version": self.version,
             # Convert UTC timezone to 'Z' format
-            "created_at": self.created_at.isoformat().replace('+00:00', 'Z'),
+            "created_at": self.created_at.isoformat().replace("+00:00", "Z"),
             "extensions": self.extensions or {},
         }
-        
+
         if self.languages:
             result["languages"] = self.languages
         if self.confidence_threshold is not None:
@@ -584,5 +584,3 @@ class Transcript:
         if self.styles is not None:
             result["styles"] = [s.to_dict() for s in self.styles]
         return result
-
-
