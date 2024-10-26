@@ -1429,6 +1429,7 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
             issues,
             _validate_speaker,
             "speakers",
+            True,
         )
 
     # Validate transcript styles
