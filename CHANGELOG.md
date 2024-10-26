@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.1] - 2024-10-26
+
+### Changed
+
+- Changed JSON output to consistently order speakers before segments in transcript section
+
+### Fixed
+
+- Fixed handling of empty speakers list in validation and serialization
+
 ## [0.3.0] - 2024-10-26
 
 ### Added
@@ -54,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README.md with project description and usage instructions
 - Documentation structure
 
-[Unreleased]: https://github.com/yaniv-golan/stjlib/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/yaniv-golan/stjlib/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/yaniv-golan/stjlib/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yaniv-golan/stjlib/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yaniv-golan/stjlib/releases/tag/v0.2.0

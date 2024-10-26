@@ -30,7 +30,7 @@ Note:
     https://github.com/yaniv-golan/STJ
 
 Version:
-    0.3.0
+    0.3.1
 """
 
 import json
