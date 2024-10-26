@@ -20,7 +20,7 @@ from .core.data_classes import (
     Speaker,
     Style,
     Source,
-    Transcriber
+    Transcriber,
 )
 from .core.enums import WordTimingMode, WordDuration
 from .validation import ValidationIssue
@@ -39,7 +39,7 @@ __all__ = [
     "Transcriber",
     "WordTimingMode",
     "WordDuration",
-    "ValidationIssue"
+    "ValidationIssue",
 ]
 
 __version__ = "0.2.0"

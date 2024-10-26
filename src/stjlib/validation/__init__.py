@@ -6,12 +6,12 @@ from .validators import (
     ValidationIssue,
     validate_stj,
     validate_metadata,
-    validate_transcript
+    validate_transcript,
 )
 
 __all__ = [
-    'ValidationIssue',
-    'validate_stj',
-    'validate_metadata',
-    'validate_transcript'
+    "ValidationIssue",
+    "validate_stj",
+    "validate_metadata",
+    "validate_transcript",
 ]

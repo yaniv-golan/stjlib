@@ -10,19 +10,19 @@ from .data_classes import (
     Speaker,
     Style,
     Source,
-    Transcriber
+    Transcriber,
 )
 from .enums import WordTimingMode, WordDuration
 
 __all__ = [
-    'Metadata',
-    'Transcript',
-    'Segment',
-    'Word',
-    'Speaker',
-    'Style',
-    'Source',
-    'Transcriber',
-    'WordTimingMode',
-    'WordDuration'
+    "Metadata",
+    "Transcript",
+    "Segment",
+    "Word",
+    "Speaker",
+    "Style",
+    "Source",
+    "Transcriber",
+    "WordTimingMode",
+    "WordDuration",
 ]
