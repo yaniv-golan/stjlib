@@ -23,21 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Comprehensive docstrings following Google style
-- Improved datetime handling with support for both 'Z' and '+00:00' timezone formats
-- Enhanced validation for language codes and time formats
+- Comprehensive validation system with detailed error messages
+- Core data classes for improved type safety and structure
+- Support for extensions in all major components
+- Enhanced language code validation and handling
+- Improved datetime handling with timezone support
+- New validation module with extensive checks
+- Detailed docstrings following Google style
 
 ### Changed
 
-- Standardized timezone output to use 'Z' format
-- Improved error messages for validation issues
-- Updated documentation structure and examples
+- Restructured package into modular components
+- Improved error handling and validation messages
+- Enhanced type checking and validation
+- Updated version handling to require 0.5.x or higher
+- Standardized code formatting and documentation
+- Improved test coverage and organization
 
 ### Fixed
 
 - Fixed datetime parsing issues with different timezone formats
 - Corrected validation of zero-duration segments
 - Improved handling of empty extensions
+- Fixed language code validation edge cases
 
 ## [0.2.0] - 2024-10-23
 
