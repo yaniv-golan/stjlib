@@ -1086,7 +1086,9 @@ def validate_speakers(transcript: Transcript) -> List[ValidationIssue]:
             speaker_ids = set()
             for idx, speaker in enumerate(transcript.speakers):
                 # Use the consolidated speaker_id validation
-                issues.extend(validate_speaker_id(speaker.id, f"transcript.speakers[{idx}].id"))
+                issues.extend(
+                    validate_speaker_id(speaker.id, f"transcript.speakers[{idx}].id")
+                )
 
                 if speaker.id in speaker_ids:
                     issues.append(

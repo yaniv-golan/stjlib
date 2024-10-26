@@ -207,16 +207,17 @@ class StandardTranscriptionJSON:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the STJ object to a dictionary."""
-        d = {
-            "metadata": self.metadata.to_dict(),
-            "transcript": {}
-        }
+        d = {"metadata": self.metadata.to_dict(), "transcript": {}}
 
         # Include speakers first if list exists and has entries
         if self.transcript.speakers is not None and len(self.transcript.speakers) > 0:
-            d["transcript"]["speakers"] = [speaker.to_dict() for speaker in self.transcript.speakers]
+            d["transcript"]["speakers"] = [
+                speaker.to_dict() for speaker in self.transcript.speakers
+            ]
 
         # Then add segments
-        d["transcript"]["segments"] = [segment.to_dict() for segment in self.transcript.segments]
+        d["transcript"]["segments"] = [
+            segment.to_dict() for segment in self.transcript.segments
+        ]
 
         return d
