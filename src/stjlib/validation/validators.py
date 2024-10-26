@@ -1079,35 +1079,30 @@ def validate_speakers(transcript: Transcript) -> List[ValidationIssue]:
     """Validate speakers according to STJ specification requirements."""
     issues = []
 
-    if not transcript.speakers:
-        issues.append(
-            ValidationIssue(
-                message="Missing 'transcript.speakers'. There must be at least one speaker.",
-                location="transcript.speakers",
-            )
-        )
-        return issues
+    # Always validate if speakers exists (even if empty) to check extensions
+    if transcript.speakers is not None:
+        # Validate speakers if any exist
+        if len(transcript.speakers) > 0:
+            speaker_ids = set()
+            for idx, speaker in enumerate(transcript.speakers):
+                # Use the consolidated speaker_id validation
+                issues.extend(validate_speaker_id(speaker.id, f"transcript.speakers[{idx}].id"))
 
-    speaker_ids = set()
-    for idx, speaker in enumerate(transcript.speakers):
-        # Use the consolidated speaker_id validation
-        issues.extend(validate_speaker_id(speaker.id, f"transcript.speakers[{idx}].id"))
+                if speaker.id in speaker_ids:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Duplicate speaker ID: {speaker.id}",
+                            location=f"transcript.speakers[{idx}].id",
+                        )
+                    )
+                speaker_ids.add(speaker.id)
 
-        if speaker.id in speaker_ids:
-            issues.append(
-                ValidationIssue(
-                    message=f"Duplicate speaker ID: {speaker.id}",
-                    location=f"transcript.speakers[{idx}].id",
-                )
-            )
-        speaker_ids.add(speaker.id)
-
-        if speaker.extensions:
-            issues.extend(
-                validate_extensions(
-                    speaker.extensions, f"transcript.speakers[{idx}].extensions"
-                )
-            )
+                if speaker.extensions:
+                    issues.extend(
+                        validate_extensions(
+                            speaker.extensions, f"transcript.speakers[{idx}].extensions"
+                        )
+                    )
 
     return issues
 
@@ -1116,8 +1111,9 @@ def validate_transcript(transcript: Transcript) -> List[ValidationIssue]:
     """Validate transcript according to STJ specification requirements."""
     issues = []
 
-    # Validate speakers
-    issues.extend(validate_speakers(transcript))
+    # Validate speakers if present
+    if transcript.speakers is not None:
+        issues.extend(validate_speakers(transcript))
 
     # Validate segments
     if transcript.segments is None:

@@ -206,12 +206,17 @@ class StandardTranscriptionJSON:
             raise IOError(f"Error writing to file {filename}: {e}")
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the STJ instance to a dictionary.
-
-        Returns:
-            Dictionary representation of the STJ instance.
-        """
-        return {
+        """Convert the STJ object to a dictionary."""
+        d = {
             "metadata": self.metadata.to_dict(),
-            "transcript": self.transcript.to_dict(),
+            "transcript": {}
         }
+
+        # Include speakers first if list exists and has entries
+        if self.transcript.speakers is not None and len(self.transcript.speakers) > 0:
+            d["transcript"]["speakers"] = [speaker.to_dict() for speaker in self.transcript.speakers]
+
+        # Then add segments
+        d["transcript"]["segments"] = [segment.to_dict() for segment in self.transcript.segments]
+
+        return d
