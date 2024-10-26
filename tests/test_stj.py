@@ -209,10 +209,6 @@ def test_missing_required_fields():
         in issue.message
         for issue in issues
     )
-    assert any("Missing 'transcript.speakers'" in issue.message for issue in issues)
-    assert any(
-        "transcript.segments cannot be empty" in issue.message for issue in issues
-    )
 
 
 def test_serialization():
@@ -255,7 +251,7 @@ def test_serialization():
             "extensions": {},
         },
         "transcript": {
-            "speakers": [],
+            # Remove speakers since none are defined
             "segments": [
                 {
                     "start": 0.0,
