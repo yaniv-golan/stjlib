@@ -204,9 +204,20 @@ class Metadata:
         Returns:
             A new Metadata instance.
         """
+        # Handle both 'Z' and '+00:00' timezone formats
+        created_at_str = data["created_at"]
+        try:
+            created_at = datetime.fromisoformat(created_at_str)
+        except ValueError:
+            # If direct parsing fails, try converting 'Z' to '+00:00'
+            if created_at_str.endswith('Z'):
+                created_at = datetime.fromisoformat(created_at_str[:-1] + '+00:00')
+            else:
+                raise
+
         return cls(
             transcriber=Transcriber.from_dict(data.get("transcriber", {})),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=created_at,
             version=data["version"],
             source=Source.from_dict(data["source"]) if "source" in data else None,
             languages=_deserialize_languages(data.get("languages")),
@@ -223,10 +234,11 @@ class Metadata:
         result = {
             "transcriber": self.transcriber.to_dict(),
             "version": self.version,
-            "created_at": self.created_at.isoformat(),
+            # Convert UTC timezone to 'Z' format
+            "created_at": self.created_at.isoformat().replace('+00:00', 'Z'),
             "extensions": self.extensions or {},
         }
-
+        
         if self.languages:
             result["languages"] = self.languages
         if self.confidence_threshold is not None:
@@ -572,3 +584,5 @@ class Transcript:
         if self.styles is not None:
             result["styles"] = [s.to_dict() for s in self.styles]
         return result
+
+
