@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.1] - 2024-10-26
+## [0.3.2] - 2024-10-26
 
 ### Changed
 
@@ -64,7 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README.md with project description and usage instructions
 - Documentation structure
 
-[Unreleased]: https://github.com/yaniv-golan/stjlib/compare/v0.3.1...HEAD
-[0.3.1]: https://github.com/yaniv-golan/stjlib/compare/v0.3.0...v0.3.1
+[Unreleased]: https://github.com/yaniv-golan/stjlib/compare/v0.3.2...HEAD
 [0.3.0]: https://github.com/yaniv-golan/stjlib/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yaniv-golan/stjlib/releases/tag/v0.2.0
