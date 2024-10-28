@@ -17,7 +17,7 @@ Note:
     any problems found during validation.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, asdict
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_EVEN
 import re
@@ -1263,9 +1263,7 @@ def _validate_speaker(
         speaker.name, f"{base_location}[{idx}].name", issues, required=False
     )
 
-    _validate_optional_field(
-        speaker.extensions, dict, f"{base_location}[{idx}].extensions", issues
-    )
+    _validate_optional_field(speaker.extensions, dict, f"{base_location}[{idx}].extensions", issues)
 
 
 # Update _validate_style similarly
@@ -1334,8 +1332,32 @@ def _validate_language(
         issues.extend(validate_language_code(lang, f"{location}[{idx}]"))
 
 
-# Update validate_types for languages
+def _check_unexpected_fields(obj: Any, expected_fields: set, location: str) -> List[ValidationIssue]:
+    """Check for unexpected fields in a dataclass instance.
+
+    Args:
+        obj: The dataclass instance to check
+        expected_fields: Set of expected field names
+        location: Location in the STJ structure for error reporting
+
+    Returns:
+        List of validation issues found
+    """
+    issues = []
+    obj_dict = asdict(obj)
+    unexpected_fields = set(obj_dict.keys()) - expected_fields
+    if unexpected_fields:
+        issues.append(
+            ValidationIssue(
+                message=f"Unexpected fields in {location}: {', '.join(unexpected_fields)}",
+                location=location
+            )
+        )
+    return issues
+
+
 def validate_types(metadata: Metadata, transcript: Transcript) -> List[ValidationIssue]:
+    """Validate types and required fields in STJ data."""
     issues = []
 
     if metadata is None:
@@ -1354,7 +1376,14 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
         )
         return issues
 
-    # Add transcriber check and validate all required metadata fields together
+    # Check for unexpected fields in metadata
+    issues.extend(_check_unexpected_fields(
+        metadata,
+        {field.name for field in fields(Metadata)},
+        "metadata"
+    ))
+
+    # Check for unexpected fields in transcriber and validate required fields
     if metadata.transcriber is None:
         issues.append(
             ValidationIssue(
@@ -1363,6 +1392,11 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
             )
         )
     else:
+        issues.extend(_check_unexpected_fields(
+            metadata.transcriber,
+            {field.name for field in fields(Transcriber)},
+            "metadata.transcriber"
+        ))
         _validate_required_field(
             metadata.transcriber.name, str, "metadata.transcriber.name", issues
         )
@@ -1382,8 +1416,13 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
             required=True,
         )
 
-    # Validate metadata.source fields if present
+    # Check for unexpected fields in source and validate fields if present
     if metadata.source is not None:
+        issues.extend(_check_unexpected_fields(
+            metadata.source,
+            {field.name for field in fields(Source)},
+            "metadata.source"
+        ))
         _validate_optional_field(
             metadata.source.uri, str, "metadata.source.uri", issues
         )
@@ -1421,6 +1460,13 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
     )
     _validate_optional_field(metadata.extensions, dict, "metadata.extensions", issues)
 
+    # Check for unexpected fields in transcript
+    issues.extend(_check_unexpected_fields(
+        transcript,
+        {field.name for field in fields(Transcript)},
+        "transcript"
+    ))
+
     # Validate transcript speakers
     if transcript.speakers is not None:  # Only check for None
         _validate_list_field(
@@ -1456,6 +1502,13 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
                     )
                 )
                 continue
+
+            # Check for unexpected fields in segment
+            issues.extend(_check_unexpected_fields(
+                segment,
+                {field.name for field in fields(Segment)},
+                f"transcript.segments[{idx}]"
+            ))
 
             # Required fields - only need _validate_non_empty_string for text
             _validate_required_field(
@@ -1516,6 +1569,13 @@ def validate_types(metadata: Metadata, transcript: Transcript) -> List[Validatio
 
             # Validate words in segment
             if segment.words is not None:
+                for word_idx, word in enumerate(segment.words):
+                    if word is not None:
+                        issues.extend(_check_unexpected_fields(
+                            word,
+                            {field.name for field in fields(Word)},
+                            f"transcript.segments[{idx}].words[{word_idx}]"
+                        ))
                 _validate_list_field(
                     segment.words,
                     f"transcript.segments[{idx}].words",

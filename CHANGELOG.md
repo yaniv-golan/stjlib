@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Validation for unexpected fields in all STJ elements (metadata, transcript, segments, words, speakers, styles)
+
 ### Changed
 
 ### Deprecated
