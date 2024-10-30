@@ -42,17 +42,40 @@ pip install stjlib
 from stjlib import StandardTranscriptionJSON
 
 # Load and validate an STJ file
-stj = StandardTranscriptionJSON.from_file('path/to/file.stj.json', validate=True)
+stj = StandardTranscriptionJSON.from_file('path/to/file.stjson', validate=True)
 
 # Access metadata and transcript data
 print(stj.metadata)
 print(stj.transcript)
 
-# Save modified data back to a file
-stj.to_file('path/to/output.stj.json')
+# Add a segment with word timing
+segment = {
+    "start": 0.0,
+    "end": 5.0,
+    "text": "Hello world",
+    "word_timing_mode": "complete",
+    "words": [
+        {"start": 0.0, "end": 1.0, "text": "Hello"},
+        {"start": 1.0, "end": 2.0, "text": "world"}
+    ]
+}
+stj.transcript.segments.append(segment)
+
+# Save to file
+stj.to_file('output.stjson')
 ```
 
 For more examples and detailed usage instructions, please refer to our [documentation](https://stjlib.readthedocs.io/).
+
+## File Format Support
+
+STJLib supports the Standard Transcription JSON (STJ) format with the following file extensions:
+
+- Primary (Recommended): `.stjson`
+- Alternative: `.stj`
+- Alternative: `.stj.json` (systems supporting double extensions)
+
+MIME Type: `application/vnd.stj+json` (fallback: `application/json`)
 
 ## Development
 
@@ -60,7 +83,7 @@ For more examples and detailed usage instructions, please refer to our [document
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/stjlib.git
+git clone https://github.com/yaniv-golan/stjlib.git
 cd stjlib
 
 # Install development dependencies
@@ -93,5 +116,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-- For bugs and feature requests, please [open an issue](https://github.com/yourusername/stjlib/issues)
-- For other questions, start a [GitHub Discussion](https://github.com/yourusername/stjlib/discussions)
+- For bugs and feature requests, please [open an issue](https://github.com/yaniv-golan/stjlib/issues)
+- For other questions, start a [GitHub Discussion](https://github.com/yaniv-golan/stjlib/discussions)

@@ -3,6 +3,7 @@
 """Core components of the STJLib package."""
 
 from .data_classes import (
+    STJ,
     Metadata,
     Transcript,
     Segment,
@@ -12,9 +13,10 @@ from .data_classes import (
     Source,
     Transcriber,
 )
-from .enums import WordTimingMode, WordDuration
+from .enums import WordTimingMode
 
 __all__ = [
+    "STJ",
     "Metadata",
     "Transcript",
     "Segment",
@@ -24,5 +26,4 @@ __all__ = [
     "Source",
     "Transcriber",
     "WordTimingMode",
-    "WordDuration",
 ]

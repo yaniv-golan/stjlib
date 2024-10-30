@@ -22,7 +22,7 @@ from .core.data_classes import (
     Source,
     Transcriber,
 )
-from .core.enums import WordTimingMode, WordDuration
+from .core.enums import WordTimingMode
 from .validation import ValidationIssue
 
 __all__ = [
@@ -38,8 +38,7 @@ __all__ = [
     "Source",
     "Transcriber",
     "WordTimingMode",
-    "WordDuration",
     "ValidationIssue",
 ]
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"

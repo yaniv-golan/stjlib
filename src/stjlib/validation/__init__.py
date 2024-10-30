@@ -7,6 +7,7 @@ from .validators import (
     validate_stj,
     validate_metadata,
     validate_transcript,
+    ValidationSeverity,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "validate_stj",
     "validate_metadata",
     "validate_transcript",
+    "ValidationSeverity",
 ]
