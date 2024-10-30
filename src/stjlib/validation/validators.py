@@ -1021,42 +1021,46 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
             )
 
         if has_start and has_end:
-            # Validate time formats
-            issues.extend(validate_time_format(segment.start, f"{location}.start"))
-            issues.extend(validate_time_format(segment.end, f"{location}.end"))
-
-            # Validate zero-duration segments
-            issues.extend(
-                validate_zero_duration(
-                    segment.start, segment.end, segment.is_zero_duration, location
+            # Validate time formats first
+            start_issues = validate_time_format(segment.start, f"{location}.start")
+            end_issues = validate_time_format(segment.end, f"{location}.end")
+            issues.extend(start_issues)
+            issues.extend(end_issues)
+            
+            # Only proceed with other time-based validations if time formats are valid
+            if not start_issues and not end_issues:
+                # Validate zero-duration segments
+                issues.extend(
+                    validate_zero_duration(
+                        segment.start, segment.end, segment.is_zero_duration, location
+                    )
                 )
-            )
 
-            # Check segment ordering and overlap
-            if idx > 0:
-                if segment.start < previous_end:
-                    issues.append(
-                        ValidationIssue(
-                            message="Segments must not overlap and must be ordered by start time.",
-                            location=location,
-                            severity=ValidationSeverity.ERROR,
-                            spec_ref="#segment-ordering",
+                # Check segment ordering and overlap
+                if idx > 0:
+                    if segment.start < previous_end:
+                        issues.append(
+                            ValidationIssue(
+                                message="Segments must not overlap and must be ordered by start time.",
+                                location=location,
+                                severity=ValidationSeverity.ERROR,
+                                spec_ref="#segment-ordering",
+                            )
                         )
-                    )
-                elif segment.start == previous_end:
-                    # Segments can touch but not overlap
-                    pass
-                elif segment.start < previous_end:
-                    issues.append(
-                        ValidationIssue(
-                            message="Segments must be ordered by start time.",
-                            location=location,
-                            severity=ValidationSeverity.ERROR,
-                            spec_ref="#segment-ordering",
+                    elif segment.start == previous_end:
+                        # Segments can touch but not overlap
+                        pass
+                    elif segment.start < previous_end:
+                        issues.append(
+                            ValidationIssue(
+                                message="Segments must be ordered by start time.",
+                                location=location,
+                                severity=ValidationSeverity.ERROR,
+                                spec_ref="#segment-ordering",
+                            )
                         )
-                    )
 
-            previous_end = segment.end
+                previous_end = segment.end
 
         else:
             # If 'start' and 'end' are absent, 'is_zero_duration' must not be present
