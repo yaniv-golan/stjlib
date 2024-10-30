@@ -56,7 +56,7 @@ Note:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from iso639.exceptions import InvalidLanguageValue
 from .enums import WordTimingMode
 
@@ -168,7 +168,10 @@ class STJ:
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the STJ instance to a dictionary."""
-        result = {"version": self.version, "transcript": self.transcript.to_dict()}
+        if self.transcript is None:
+            result = {"version": self.version}
+        else:
+            result = {"version": self.version, "transcript": self.transcript.to_dict()}
         if self.metadata is not None:
             result["metadata"] = self.metadata.to_dict()
         return {"stj": result}
@@ -847,7 +850,7 @@ class Segment:
     confidence: Optional[float] = None
     language: Optional[str] = None
     style_id: Optional[str] = None
-    word_timing_mode: Optional[WordTimingMode] = None
+    word_timing_mode: Optional[Union[WordTimingMode, str]] = None
     words: Optional[List["Word"]] = None
     extensions: Optional[Dict[str, Any]] = None
 
@@ -935,7 +938,12 @@ class Segment:
         if self.style_id is not None:
             result["style_id"] = self.style_id
         if self.word_timing_mode is not None:
-            result["word_timing_mode"] = self.word_timing_mode.value
+            # Handle both string and enum values
+            result["word_timing_mode"] = (
+                self.word_timing_mode.value
+                if isinstance(self.word_timing_mode, WordTimingMode)
+                else self.word_timing_mode
+            )
         if self.words is not None:
             result["words"] = [w.to_dict() for w in self.words]
         if self.extensions:
