@@ -126,6 +126,7 @@ class STJ:
         version (str): STJ specification version (e.g., "0.6.0")
         transcript (Transcript): Main content of the transcription
         metadata (Optional[Metadata]): Optional metadata about the transcription
+        _additional_fields (Dict[str, Any]): Additional fields not included in the STJ structure
 
     Example:
         ```python
@@ -154,16 +155,22 @@ class STJ:
     version: str
     transcript: "Transcript"
     metadata: Optional["Metadata"] = None
+    _additional_fields: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "STJ":
         """Creates an STJ instance from a dictionary."""
+        # Extract known fields
+        known_fields = {"version", "metadata", "transcript"}
+        additional_fields = {k: v for k, v in data.items() if k not in known_fields}
+        
         return cls(
             version=data["version"],
             metadata=Metadata.from_dict(data["metadata"])
             if "metadata" in data
             else None,
             transcript=Transcript.from_dict(data["transcript"]),
+            _additional_fields=additional_fields
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -174,6 +181,10 @@ class STJ:
             result = {"version": self.version, "transcript": self.transcript.to_dict()}
         if self.metadata is not None:
             result["metadata"] = self.metadata.to_dict()
+            
+        # Add any additional fields
+        result.update(self._additional_fields)
+        
         return {"stj": result}
 
 

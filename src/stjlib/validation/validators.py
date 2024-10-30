@@ -3028,6 +3028,7 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
     * Type validation (must be STJ instance)
     * Required field presence
     * Basic structural validation
+    * Unexpected field validation
 
     Args:
         stj (STJ): STJ object to validate
@@ -3044,24 +3045,11 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
     Note:
         - Must be an instance of STJ class
         - Must contain required fields (version, transcript)
+        - Must not contain unexpected fields
         - Additional root structure validation can be added here
     """
     issues = []
-    
-    # Check for unexpected fields in root object
-    allowed_fields = {"version", "transcript", "metadata"}
-    if hasattr(stj, "__dict__"):
-        unexpected_fields = set(stj.__dict__.keys()) - allowed_fields
-        if unexpected_fields:
-            issues.append(
-                ValidationIssue(
-                    message=f"Unexpected fields in root object: {', '.join(unexpected_fields)}",
-                    location="stj",
-                    severity=ValidationSeverity.ERROR,
-                    spec_ref="#root-structure",
-                )
-            )
-    
+
     if not isinstance(stj, STJ):
         issues.append(
             ValidationIssue(
@@ -3071,6 +3059,25 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
                 spec_ref="#stj-root",
             )
         )
+        return issues
+
+    # Get the raw dictionary representation to check for unexpected fields
+    stj_dict = stj.to_dict()
+    root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
+
+    # Check for unexpected fields in root object
+    allowed_fields = {"version", "transcript", "metadata"}
+    unexpected_fields = {k for k in root_dict.keys() if k not in allowed_fields}
+    if unexpected_fields:
+        issues.append(
+            ValidationIssue(
+                message=f"Unexpected fields in root object: {', '.join(sorted(unexpected_fields))}",
+                location="stj",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#root-structure",
+            )
+        )
+
     return issues
 
 
@@ -3114,23 +3121,6 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
     issues = []
 
     # Structure Validation
-    stj_dict = stj.to_dict()
-    
-    # Check for unexpected fields in the root object
-    allowed_fields = {"version", "transcript", "metadata"}
-    if "stj" in stj_dict:
-        unexpected_fields = set(stj_dict["stj"].keys()) - allowed_fields
-        if unexpected_fields:
-            issues.append(
-                ValidationIssue(
-                    message=f"Unexpected fields in root object: {', '.join(unexpected_fields)}",
-                    location="stj",
-                    severity=ValidationSeverity.ERROR,
-                    spec_ref="#root-structure",
-                )
-            )
-
-    # Continue with existing validation
     issues.extend(validate_root_structure(stj))
     if issues:  # Stop if root structure is invalid
         return issues

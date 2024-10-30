@@ -368,3 +368,42 @@ def test_validate_time_formats():
             )
             for issue in issues
         ), f"Time {time} should be invalid"
+
+
+def test_invalid_additional_properties():
+    """Test validation of unexpected fields in root object."""
+    # Create a dictionary directly
+    test_dict = {
+        "version": "0.6.0",
+        "unexpected_field": "unexpected",
+        "transcript": {
+            "segments": [
+                {
+                    "text": "Sample text",
+                    "start": 0.0,
+                    "end": 5.0,
+                }
+            ]
+        }
+    }
+    
+    # Print the original dict
+    print("\nOriginal dict:", test_dict)
+    
+    # Create STJ instance and print its dict
+    stj_with_unexpected = STJ.from_dict(test_dict)
+    print("After STJ.from_dict():", stj_with_unexpected.to_dict())
+    
+    # Run validation and print all issues
+    issues = validate_stj(stj_with_unexpected)
+    print("Validation issues:", [str(issue) for issue in issues])
+    
+    # Print the dict used in validate_root_structure
+    stj_dict = stj_with_unexpected.to_dict()
+    root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
+    print("Dict used in validation:", root_dict)
+
+    assert any(
+        "Unexpected fields in root object: unexpected_field" in issue.message
+        for issue in issues
+    ), "Should detect unexpected field in root object"
