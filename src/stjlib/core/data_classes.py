@@ -160,17 +160,21 @@ class STJ:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "STJ":
         """Creates an STJ instance from a dictionary."""
+        # Handle wrapped STJ format
+        if "stj" in data:
+            data = data["stj"]
+
         # Extract known fields
         known_fields = {"version", "metadata", "transcript"}
         additional_fields = {k: v for k, v in data.items() if k not in known_fields}
-        
+
         return cls(
             version=data["version"],
             metadata=Metadata.from_dict(data["metadata"])
             if "metadata" in data
             else None,
             transcript=Transcript.from_dict(data["transcript"]),
-            _additional_fields=additional_fields
+            _additional_fields=additional_fields,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -181,10 +185,10 @@ class STJ:
             result = {"version": self.version, "transcript": self.transcript.to_dict()}
         if self.metadata is not None:
             result["metadata"] = self.metadata.to_dict()
-            
+
         # Add any additional fields
         result.update(self._additional_fields)
-        
+
         return {"stj": result}
 
 
