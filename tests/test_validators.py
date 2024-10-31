@@ -372,38 +372,31 @@ def test_validate_time_formats():
 
 def test_invalid_additional_properties():
     """Test validation of unexpected fields in root object."""
-    # Create a dictionary directly
-    test_dict = {
-        "version": "0.6.0",
-        "unexpected_field": "unexpected",
-        "transcript": {
-            "segments": [
-                {
-                    "text": "Sample text",
-                    "start": 0.0,
-                    "end": 5.0,
-                }
-            ]
+    stj_data = {
+        "stj": {
+            "version": "0.6.0",
+            "unexpected_field": "unexpected",  # Invalid additional property
+            "transcript": {
+                "segments": [
+                    {
+                        "start": 0.0,
+                        "end": 5.0,
+                        "text": "Sample text"
+                    }
+                ]
+            }
         }
     }
+    stj = STJ.from_dict(stj_data)
+    validation_issues = validate_stj(stj)
     
-    # Print the original dict
-    print("\nOriginal dict:", test_dict)
+    # Print debug information
+    print("\nOriginal data:", stj_data)
+    print("After from_dict:", stj.to_dict())
+    print("Validation issues:", validation_issues)
     
-    # Create STJ instance and print its dict
-    stj_with_unexpected = STJ.from_dict(test_dict)
-    print("After STJ.from_dict():", stj_with_unexpected.to_dict())
-    
-    # Run validation and print all issues
-    issues = validate_stj(stj_with_unexpected)
-    print("Validation issues:", [str(issue) for issue in issues])
-    
-    # Print the dict used in validate_root_structure
-    stj_dict = stj_with_unexpected.to_dict()
-    root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
-    print("Dict used in validation:", root_dict)
-
+    assert validation_issues  # Should have validation issues
     assert any(
-        "Unexpected fields in root object: unexpected_field" in issue.message
-        for issue in issues
+        "Unexpected fields in stj: unexpected_field" in issue.message
+        for issue in validation_issues
     ), "Should detect unexpected field in root object"
