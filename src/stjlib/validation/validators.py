@@ -1026,7 +1026,7 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
             end_issues = validate_time_format(segment.end, f"{location}.end")
             issues.extend(start_issues)
             issues.extend(end_issues)
-            
+
             # Only proceed with other time-based validations if time formats are valid
             if not start_issues and not end_issues:
                 # Validate zero-duration segments
@@ -1767,11 +1767,14 @@ def _check_unexpected_fields(
     """
     issues = []
     obj_dict = asdict(obj)
-    unexpected_fields = set(obj_dict.keys()) - expected_fields
+    # Exclude internal fields (starting with underscore) from validation
+    unexpected_fields = {
+        k for k in obj_dict.keys() if not k.startswith("_")
+    } - expected_fields
     if unexpected_fields:
         issues.append(
             ValidationIssue(
-                message=f"Unexpected fields in {location}: {', '.join(unexpected_fields)}",
+                message=f"Unexpected fields in {location}: {', '.join(sorted(unexpected_fields))}",
                 location=location,
                 severity=ValidationSeverity.ERROR,
                 spec_ref="#unexpected-fields",
@@ -2590,6 +2593,7 @@ def validate_styles(transcript: Transcript) -> List[ValidationIssue]:
                                 location=f"transcript.styles[{idx}].text.{key}",
                             )
                         )
+                    
 
                 # Validate percentage values
                 elif key in {"size", "opacity"}:
@@ -3047,6 +3051,12 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
         - Must contain required fields (version, transcript)
         - Must not contain unexpected fields
         - Additional root structure validation can be added here
+
+    Implementation Note:
+        Root validation is handled directly rather than using _check_unexpected_fields()
+        because we need to check the raw dictionary representation. The STJ class may
+        contain additional fields in its dictionary form that aren't part of its
+        dataclass definition, so we can't rely on dataclass field inspection here.
     """
     issues = []
 
@@ -3061,23 +3071,25 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
         )
         return issues
 
-    # Get the raw dictionary representation to check for unexpected fields
+    # Get the raw dictionary to check for unexpected fields
     stj_dict = stj.to_dict()
     root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
 
-    # Check for unexpected fields in root object
+    # Check for unexpected fields directly - see implementation note above 
+    # for reason why we are not using _check_unexpected_fields()
     allowed_fields = {"version", "transcript", "metadata"}
-    unexpected_fields = {k for k in root_dict.keys() if k not in allowed_fields}
+    unexpected_fields = {
+        k for k in root_dict.keys() if not k.startswith("_")
+    } - allowed_fields
     if unexpected_fields:
         issues.append(
             ValidationIssue(
-                message=f"Unexpected fields in root object: {', '.join(sorted(unexpected_fields))}",
+                message=f"Unexpected fields in stj: {', '.join(sorted(unexpected_fields))}",
                 location="stj",
                 severity=ValidationSeverity.ERROR,
-                spec_ref="#root-structure",
+                spec_ref="#unexpected-fields",
             )
         )
-
     return issues
 
 
