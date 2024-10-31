@@ -308,6 +308,10 @@ class StandardTranscriptionJSON:
         if not version:
             raise ValidationError([ValidationIssue("STJ version is required")])
 
+        # Extract known fields
+        known_fields = {"version", "metadata", "transcript"}
+        additional_fields = {k: v for k, v in stj_data.items() if k not in known_fields}
+
         # Create Metadata and Transcript instances
         metadata = (
             Metadata.from_dict(stj_data.get("metadata"))
@@ -316,8 +320,13 @@ class StandardTranscriptionJSON:
         )
         transcript = Transcript.from_dict(stj_data.get("transcript"))
 
-        # Create the STJ instance
-        stj = STJ(version=version, metadata=metadata, transcript=transcript)
+        # Create the STJ instance with additional fields
+        stj = STJ(
+            version=version,
+            metadata=metadata,
+            transcript=transcript,
+            _additional_fields=additional_fields,
+        )
 
         # Create the StandardTranscriptionJSON instance
         stj_handler = cls(stj=stj)
