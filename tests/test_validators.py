@@ -377,24 +377,18 @@ def test_invalid_additional_properties():
             "version": "0.6.0",
             "unexpected_field": "unexpected",  # Invalid additional property
             "transcript": {
-                "segments": [
-                    {
-                        "start": 0.0,
-                        "end": 5.0,
-                        "text": "Sample text"
-                    }
-                ]
-            }
+                "segments": [{"start": 0.0, "end": 5.0, "text": "Sample text"}]
+            },
         }
     }
     stj = STJ.from_dict(stj_data)
     validation_issues = validate_stj(stj)
-    
+
     # Print debug information
     print("\nOriginal data:", stj_data)
     print("After from_dict:", stj.to_dict())
     print("Validation issues:", validation_issues)
-    
+
     assert validation_issues  # Should have validation issues
     assert any(
         "Unexpected fields in stj: unexpected_field" in issue.message

@@ -158,3 +158,34 @@ def test_stj_serialization():
     assert data == expected
     stj_deserialized = STJ.from_dict(data["stj"])
     assert stj_instance == stj_deserialized
+
+
+def test_metadata_optional_created_at():
+    # Test with created_at omitted
+    data = {
+        "title": "Test Title",
+        "language": "en",
+        # created_at intentionally omitted
+    }
+    metadata = Metadata.from_dict(data)
+    assert metadata.created_at is None
+
+    # Test with valid created_at
+    data_with_timestamp = {
+        "title": "Test Title",
+        "language": "en",
+        "created_at": "2024-03-20T12:00:00Z",
+    }
+    metadata = Metadata.from_dict(data_with_timestamp)
+    assert metadata.created_at == "2024-03-20T12:00:00Z"
+
+    # Test with invalid created_at
+    data_invalid_timestamp = {
+        "title": "Test Title",
+        "language": "en",
+        "created_at": "invalid-timestamp",
+    }
+    with pytest.raises(
+        ValidationError, match="created_at must be a valid ISO 8601 timestamp"
+    ):
+        Metadata.from_dict(data_invalid_timestamp)

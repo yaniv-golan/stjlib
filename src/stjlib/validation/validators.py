@@ -169,7 +169,7 @@ class ValidationIssue:
     spec_ref: Optional[str] = None
     error_code: Optional[str] = None  # Add error code
     suggestion: Optional[str] = None  # Add suggestion for fix
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert validation issue to structured dictionary format."""
         return {
@@ -178,7 +178,7 @@ class ValidationIssue:
             "severity": self.severity.value,
             "spec_ref": self.spec_ref,
             "error_code": self.error_code,
-            "suggestion": self.suggestion
+            "suggestion": self.suggestion,
         }
 
     def __str__(self) -> str:
@@ -410,7 +410,9 @@ def validate_version(version: str) -> List[ValidationIssue]:
     return issues
 
 
-def validate_uri(uri: str, location: str, base_uri: Optional[str] = None) -> List[ValidationIssue]:
+def validate_uri(
+    uri: str, location: str, base_uri: Optional[str] = None
+) -> List[ValidationIssue]:
     """Validate URI format and structure according to STJ specification.
 
     Performs comprehensive URI validation including:
@@ -441,7 +443,7 @@ def validate_uri(uri: str, location: str, base_uri: Optional[str] = None) -> Lis
     """
     issues = []
     parsed = urlparse(uri)
-    
+
     # Handle relative URIs
     if not parsed.scheme and base_uri:
         issues.append(
@@ -465,7 +467,7 @@ def validate_uri(uri: str, location: str, base_uri: Optional[str] = None) -> Lis
                     spec_ref="#uri-resolution",
                 )
             )
-    
+
     # Validate scheme presence
     if not parsed.scheme:
         issues.append(
@@ -498,7 +500,7 @@ def validate_uri(uri: str, location: str, base_uri: Optional[str] = None) -> Lis
                         spec_ref="#uri-file-path",
                     )
                 )
-    
+
     # Validate URI characters according to RFC 3986
     if re.search(URI_INVALID_CHARS_PATTERN, uri):
         issues.append(
@@ -711,7 +713,7 @@ def validate_language_consistency(
                             spec_ref="#language-codes",
                         )
                     )
-                
+
                 # Track the language for consistency checking
                 primary = lang.pt1 or lang.pt3
                 entry = language_code_map.setdefault(
@@ -728,7 +730,7 @@ def validate_language_consistency(
             track_codes(metadata.languages, "metadata.languages")
         if metadata.source and metadata.source.languages:
             track_codes(metadata.source.languages, "metadata.source.languages")
-    
+
     if transcript and transcript.segments:
         for idx, segment in enumerate(transcript.segments):
             if segment.language:
@@ -2700,7 +2702,6 @@ def validate_styles(transcript: Transcript) -> List[ValidationIssue]:
                                 location=f"transcript.styles[{idx}].text.{key}",
                             )
                         )
-                    
 
                 # Validate percentage values
                 elif key in {"size", "opacity"}:
@@ -3182,7 +3183,7 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
     stj_dict = stj.to_dict()
     root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
 
-    # Check for unexpected fields directly - see implementation note above 
+    # Check for unexpected fields directly - see implementation note above
     # for reason why we are not using _check_unexpected_fields()
     allowed_fields = {"version", "transcript", "metadata"}
     unexpected_fields = {
@@ -3262,7 +3263,7 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
 
     # Validate language codes and consistency
     issues.extend(validate_language_codes(stj.metadata, stj.transcript))
-    issues.extend(validate_language_consistency(stj.metadata, stj.transcript))  
+    issues.extend(validate_language_consistency(stj.metadata, stj.transcript))
 
     # Validate confidence scores
     issues.extend(validate_confidence_scores(stj.transcript))
@@ -3272,29 +3273,32 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
 
     return issues
 
+
 # Add recovery strategies for overlapping segments
-def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[ValidationIssue], Optional[Segment]]:
+def _handle_segment_overlap(
+    segment1: Segment, segment2: Segment
+) -> Tuple[List[ValidationIssue], Optional[Segment]]:
     """Handle overlapping segments with recovery strategies.
-    
+
     Implements recovery strategies for overlapping segments according to STJ spec:
     1. Merge Strategy: Combines overlapping segments if they have compatible properties
     2. Adjust Strategy: Adjusts segment boundaries to eliminate overlap
     3. Split Strategy: Splits overlap into separate segments
-    
+
     Args:
         segment1: First segment in time order
         segment2: Second segment in time order
-        
+
     Returns:
         Tuple containing:
         - List of validation issues
         - Optional merged/adjusted segment if recovery was successful
     """
     issues = []
-    
+
     if segment1.end <= segment2.start:
         return issues, None  # No overlap
-        
+
     # Report the overlap
     issues.append(
         ValidationIssue(
@@ -3304,11 +3308,11 @@ def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[
             error_code="SEGMENT_OVERLAP",
         )
     )
-    
+
     # Try recovery strategies in order:
-    
+
     # 1. Merge Strategy - if segments have compatible properties
-    if (_can_merge_segments(segment1, segment2)):
+    if _can_merge_segments(segment1, segment2):
         merged = _merge_segments(segment1, segment2)
         issues.append(
             ValidationIssue(
@@ -3319,7 +3323,7 @@ def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[
             )
         )
         return issues, merged
-        
+
     # 2. Adjust Strategy - modify end/start times
     if abs(segment1.end - segment2.start) < 0.5:  # Small overlap
         segment1.end = segment2.start
@@ -3332,23 +3336,25 @@ def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[
             )
         )
         return issues, None
-        
+
     # 3. Split Strategy - create new segment for overlap
     overlap_start = segment2.start
     overlap_end = segment1.end
-    
+
     segment1.end = overlap_start
     segment2.start = overlap_end
-    
+
     # Create new segment for overlap region
     overlap_segment = Segment(
         text=f"{segment1.text} {segment2.text}",
         start=overlap_start,
         end=overlap_end,
         speaker_id=segment1.speaker_id,  # Use properties from first segment
-        confidence=min(segment1.confidence, segment2.confidence) if segment1.confidence and segment2.confidence else None
+        confidence=min(segment1.confidence, segment2.confidence)
+        if segment1.confidence and segment2.confidence
+        else None,
     )
-    
+
     issues.append(
         ValidationIssue(
             message="Created new segment for overlap region",
@@ -3357,16 +3363,18 @@ def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[
             error_code="SEGMENT_SPLIT",
         )
     )
-    
+
     return issues, overlap_segment
+
 
 def _can_merge_segments(segment1: Segment, segment2: Segment) -> bool:
     """Check if two segments can be safely merged."""
     return (
-        segment1.speaker_id == segment2.speaker_id and
-        segment1.style_id == segment2.style_id and
-        segment1.language == segment2.language
+        segment1.speaker_id == segment2.speaker_id
+        and segment1.style_id == segment2.style_id
+        and segment1.language == segment2.language
     )
+
 
 def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
     """Merge two overlapping segments into one."""
@@ -3377,22 +3385,29 @@ def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
         speaker_id=segment1.speaker_id,
         style_id=segment1.style_id,
         language=segment1.language,
-        confidence=min(segment1.confidence, segment2.confidence) if segment1.confidence and segment2.confidence else None,
-        word_timing_mode=WordTimingMode.PARTIAL if segment1.words or segment2.words else None,
-        words=_merge_word_lists(segment1.words, segment2.words) if segment1.words and segment2.words else None
+        confidence=min(segment1.confidence, segment2.confidence)
+        if segment1.confidence and segment2.confidence
+        else None,
+        word_timing_mode=WordTimingMode.PARTIAL
+        if segment1.words or segment2.words
+        else None,
+        words=_merge_word_lists(segment1.words, segment2.words)
+        if segment1.words and segment2.words
+        else None,
     )
+
 
 def _merge_word_lists(words1: List[Word], words2: List[Word]) -> List[Word]:
     """Merge two lists of words, preserving timing where possible."""
     if not words1 or not words2:
         return words1 or words2
-        
+
     merged = []
     # Add words with timing info
     for word in words1 + words2:
         if word.start is not None and word.end is not None:
             merged.append(word)
-            
+
     # Sort by start time
-    merged.sort(key=lambda w: w.start if w.start is not None else float('inf'))
+    merged.sort(key=lambda w: w.start if w.start is not None else float("inf"))
     return merged
