@@ -1,5 +1,10 @@
 """STJLib core data classes for Standard Transcription JSON Format.
 
+IMPORTANT: This module only defines data structures and serialization.
+All validation is handled separately in stjlib.validation.validators.
+Data classes should NOT perform validation - they should preserve data
+as-is for validation to happen later.
+
 This module provides the core data structures that represent STJ format components.
 Each class corresponds to a specific part of the STJ structure and includes
 serialization/deserialization capabilities.
@@ -16,10 +21,9 @@ Key Components:
 Features:
     * Complete STJ structure representation
     * JSON serialization/deserialization
-    * Type hints and validation support
-    * Language code handling
-    * Extensible data structures
+    * Type hints for static analysis
     * Clean attribute management via dataclasses
+    * Preserves data for validation layer
 
 Example:
     ```python
@@ -50,8 +54,8 @@ Example:
 
 Note:
     All classes use Python's dataclass decorator for clean attribute management
-    and include from_dict/to_dict methods for JSON serialization. Optional fields
-    are handled gracefully during serialization.
+    and include from_dict/to_dict methods for JSON serialization. Data is preserved
+    as-is without validation to maintain separation of concerns.
 """
 
 from dataclasses import dataclass, field
@@ -412,7 +416,7 @@ class Metadata:
     def from_dict(cls, data: Dict[str, Any]) -> "Metadata":
         """Creates a Metadata instance from a dictionary.
 
-        Handles timezone-aware datetime parsing and optional fields.
+        Handles timestamp parsing but preserves all other data as-is without validation.
 
         Args:
             data (Dict[str, Any]): Dictionary containing metadata fields
@@ -442,7 +446,7 @@ class Metadata:
                 else:
                     created_at = datetime.fromisoformat(created_at_str)
             except ValueError:
-                created_at = None
+                created_at = created_at_str  # Preserve invalid timestamp for validation
         else:
             created_at = None
 
