@@ -50,8 +50,8 @@ from dataclasses import dataclass, fields, asdict
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_EVEN
 import re
-from typing import Any, Dict, List, Optional, Union, Type, Callable
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional, Union, Type, Callable, Tuple
+from urllib.parse import urlparse, urljoin
 from enum import Enum, auto
 import math
 from decimal import Decimal, InvalidOperation
@@ -148,6 +148,8 @@ class ValidationIssue:
             Example: "transcript.segments[0].words[2].start"
         severity (ValidationSeverity): Severity level of the issue (ERROR, WARNING, INFO).
         spec_ref (Optional[str]): Reference to relevant specification section.
+        error_code (Optional[str]): Add error code
+        suggestion (Optional[str]): Add suggestion for fix
 
     Example:
         ```python
@@ -165,6 +167,19 @@ class ValidationIssue:
     location: Optional[str] = None
     severity: ValidationSeverity = ValidationSeverity.ERROR
     spec_ref: Optional[str] = None
+    error_code: Optional[str] = None  # Add error code
+    suggestion: Optional[str] = None  # Add suggestion for fix
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert validation issue to structured dictionary format."""
+        return {
+            "message": self.message,
+            "location": self.location,
+            "severity": self.severity.value,
+            "spec_ref": self.spec_ref,
+            "error_code": self.error_code,
+            "suggestion": self.suggestion
+        }
 
     def __str__(self) -> str:
         """Returns a formatted string representation of the validation issue.
@@ -395,7 +410,7 @@ def validate_version(version: str) -> List[ValidationIssue]:
     return issues
 
 
-def validate_uri(uri: str, location: str) -> List[ValidationIssue]:
+def validate_uri(uri: str, location: str, base_uri: Optional[str] = None) -> List[ValidationIssue]:
     """Validate URI format and structure according to STJ specification.
 
     Performs comprehensive URI validation including:
@@ -406,7 +421,8 @@ def validate_uri(uri: str, location: str) -> List[ValidationIssue]:
 
     Args:
         uri (str): URI string to validate
-        location (str): Path to the URI field in the STJ structure for error reporting
+        location (str): Path to the URI field in the STJ structure
+        base_uri (Optional[str]): Base URI for resolving relative URIs
 
     Returns:
         List[ValidationIssue]: List of validation issues found. Empty list if valid.
@@ -425,7 +441,32 @@ def validate_uri(uri: str, location: str) -> List[ValidationIssue]:
     """
     issues = []
     parsed = urlparse(uri)
-
+    
+    # Handle relative URIs
+    if not parsed.scheme and base_uri:
+        issues.append(
+            ValidationIssue(
+                message="Relative URIs should be avoided. Consider using absolute URIs.",
+                location=location,
+                severity=ValidationSeverity.WARNING,
+                spec_ref="#uri-relative",
+            )
+        )
+        # Try to resolve relative to base
+        try:
+            resolved = urljoin(base_uri, uri)
+            parsed = urlparse(resolved)
+        except Exception:
+            issues.append(
+                ValidationIssue(
+                    message="Failed to resolve relative URI",
+                    location=location,
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#uri-resolution",
+                )
+            )
+    
+    # Validate scheme presence
     if not parsed.scheme:
         issues.append(
             ValidationIssue(
@@ -457,6 +498,7 @@ def validate_uri(uri: str, location: str) -> List[ValidationIssue]:
                         spec_ref="#uri-file-path",
                     )
                 )
+    
     # Validate URI characters according to RFC 3986
     if re.search(URI_INVALID_CHARS_PATTERN, uri):
         issues.append(
@@ -475,7 +517,7 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
     """Validates a single language code against ISO standards.
 
     Validates that a language code conforms to either ISO 639-1 (2-letter) or
-    ISO 639-3 (3-letter) standards.
+    ISO 639-3 (3-letter) standards, enforcing the use of ISO 639-1 when available.
 
     Args:
         code (str): Language code to validate (e.g., "en" or "eng")
@@ -518,7 +560,16 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
     if len(code) == 2 or len(code) == 3:
         try:
             lang = Lang(code)
-            # If code is valid, no issues
+            # Check if ISO 639-1 code exists but ISO 639-3 was used instead
+            if len(code) == 3 and lang.pt1:  # pt1 is the ISO 639-1 code
+                issues.append(
+                    ValidationIssue(
+                        message=f"Must use ISO 639-1 code '{lang.pt1}' instead of ISO 639-3 code '{code}'.",
+                        location=location,
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#language-codes",
+                    )
+                )
         except (KeyError, InvalidLanguageValue):
             issues.append(
                 ValidationIssue(
@@ -649,7 +700,19 @@ def validate_language_consistency(
     def track_codes(codes: List[str], source: str) -> None:
         for code in codes:
             try:
-                lang = Lang(str(code))
+                lang = Lang(code)
+                # Check if ISO 639-1 code exists but ISO 639-3 was used
+                if len(code) == 3 and lang.pt1:
+                    issues.append(
+                        ValidationIssue(
+                            message=f"Must use ISO 639-1 code '{lang.pt1}' instead of ISO 639-3 code '{code}'",
+                            location=source,
+                            severity=ValidationSeverity.ERROR,
+                            spec_ref="#language-codes",
+                        )
+                    )
+                
+                # Track the language for consistency checking
                 primary = lang.pt1 or lang.pt3
                 entry = language_code_map.setdefault(
                     lang.name.lower(), {"codes": set(), "locations": set()}
@@ -660,11 +723,13 @@ def validate_language_consistency(
                 pass  # Error already reported by validate_language_code
 
     # Track all language codes
-    if metadata.languages:
-        track_codes(metadata.languages, "metadata.languages")
-    if metadata.source and metadata.source.languages:
-        track_codes(metadata.source.languages, "metadata.source.languages")
-    if transcript.segments:
+    if metadata:
+        if metadata.languages:
+            track_codes(metadata.languages, "metadata.languages")
+        if metadata.source and metadata.source.languages:
+            track_codes(metadata.source.languages, "metadata.source.languages")
+    
+    if transcript and transcript.segments:
         for idx, segment in enumerate(transcript.segments):
             if segment.language:
                 track_codes([segment.language], f"transcript.segments[{idx}].language")
@@ -677,10 +742,19 @@ def validate_language_consistency(
         if has_part1 and has_part3:
             issues.append(
                 ValidationIssue(
-                    message=f"Language code inconsistency for '{language}': Mix of ISO 639-1 and ISO 639-3 codes ({', '.join(sorted(codes))})",
+                    message=f"Inconsistent language codes used for '{language}': {', '.join(sorted(codes))}. Must use consistent codes throughout the file.",
                     location=", ".join(sorted(data["locations"])),
-                    severity=ValidationSeverity.WARNING,
-                    spec_ref="#language-code-consistency",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#language-codes",
+                )
+            )
+        elif len(codes) > 1:  # Multiple different codes used for same language
+            issues.append(
+                ValidationIssue(
+                    message=f"Inconsistent language codes used for '{language}': {', '.join(sorted(codes))}. Must use consistent codes throughout the file.",
+                    location=", ".join(sorted(data["locations"])),
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#language-codes",
                 )
             )
 
@@ -936,15 +1010,16 @@ def validate_zero_duration(
     """
     issues = []
 
-    if start == end and is_zero_duration is not True:
-        issues.append(
-            ValidationIssue(
-                message="Zero duration item must have is_zero_duration set to true",
-                location=location,
-                severity=ValidationSeverity.ERROR,
-                spec_ref="#zero-duration",
+    if start == end:
+        if not is_zero_duration:
+            issues.append(
+                ValidationIssue(
+                    message="Zero duration item must have is_zero_duration set to true",
+                    location=location,
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#zero-duration",
+                )
             )
-        )
     else:  # start != end
         if is_zero_duration:
             issues.append(
@@ -1307,17 +1382,27 @@ def _validate_word_timing_mode(
             return issues
 
         # Validate mode constraints
-        if word_timing_mode == WordTimingMode.NONE and words:
-            issues.append(
-                ValidationIssue(
-                    message="word_timing_mode 'none' must not include words array",
-                    location=f"transcript.segments[{segment_idx}]",
-                    severity=ValidationSeverity.ERROR,
-                    spec_ref="#word-timing-mode-field",
+        if word_timing_mode == WordTimingMode.NONE:
+            if words:
+                issues.append(
+                    ValidationIssue(
+                        message="word_timing_mode 'none' must not include words array",
+                        location=f"transcript.segments[{segment_idx}]",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#word-timing-mode-field",
+                    )
                 )
-            )
         elif word_timing_mode == WordTimingMode.COMPLETE:
-            # Verify all words have timing
+            # Verify all words have timing and array is not empty
+            if not words:
+                issues.append(
+                    ValidationIssue(
+                        message="word_timing_mode 'complete' must include non-empty words array",
+                        location=f"transcript.segments[{segment_idx}]",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#word-timing-mode-field",
+                    )
+                )
             for word_idx, word in enumerate(words):
                 if word.start is None or word.end is None:
                     issues.append(
@@ -1328,19 +1413,40 @@ def _validate_word_timing_mode(
                             spec_ref="#word-timing-mode-field",
                         )
                     )
+        elif word_timing_mode == WordTimingMode.PARTIAL:
+            # Verify array is not empty for partial mode
+            if not words:
+                issues.append(
+                    ValidationIssue(
+                        message="word_timing_mode 'partial' must include non-empty words array",
+                        location=f"transcript.segments[{segment_idx}]",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#word-timing-mode-field",
+                    )
+                )
 
     # Determine implicit word timing mode when not specified
-    elif words:
-        timing_status = _determine_word_timing_mode(words)
-        if timing_status == WordTimingStatus.INVALID:
+    elif words is not None:  # words array present but no mode specified
+        if not words:  # Empty array not allowed in any mode
             issues.append(
                 ValidationIssue(
-                    message="Incomplete word timing data requires explicit 'word_timing_mode: partial'",
+                    message="Empty words array is not allowed. Use word_timing_mode: 'none' instead.",
                     location=f"transcript.segments[{segment_idx}]",
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#word-timing-mode-field",
                 )
             )
+        else:
+            timing_status = _determine_word_timing_mode(words)
+            if timing_status == WordTimingStatus.INVALID:
+                issues.append(
+                    ValidationIssue(
+                        message="Incomplete word timing data requires explicit 'word_timing_mode: partial'",
+                        location=f"transcript.segments[{segment_idx}]",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#word-timing-mode-field",
+                    )
+                )
 
     return issues
 
@@ -2032,6 +2138,7 @@ def _validate_word(
         - Start and end times must both be present or both absent
         - Confidence must be between 0.0 and 1.0 if present
         - Extensions are optional but must be valid if present
+        - Empty words arrays are not allowed in any mode
     """
     location = f"{base_location}[{idx}]"
     # Validate 'text' field
@@ -3153,8 +3260,9 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
     # Validate transcript
     issues.extend(validate_transcript(stj.transcript))
 
-    # Validate language codes
+    # Validate language codes and consistency
     issues.extend(validate_language_codes(stj.metadata, stj.transcript))
+    issues.extend(validate_language_consistency(stj.metadata, stj.transcript))  
 
     # Validate confidence scores
     issues.extend(validate_confidence_scores(stj.transcript))
@@ -3163,3 +3271,128 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
     issues.extend(validate_all_extensions(stj))
 
     return issues
+
+# Add recovery strategies for overlapping segments
+def _handle_segment_overlap(segment1: Segment, segment2: Segment) -> Tuple[List[ValidationIssue], Optional[Segment]]:
+    """Handle overlapping segments with recovery strategies.
+    
+    Implements recovery strategies for overlapping segments according to STJ spec:
+    1. Merge Strategy: Combines overlapping segments if they have compatible properties
+    2. Adjust Strategy: Adjusts segment boundaries to eliminate overlap
+    3. Split Strategy: Splits overlap into separate segments
+    
+    Args:
+        segment1: First segment in time order
+        segment2: Second segment in time order
+        
+    Returns:
+        Tuple containing:
+        - List of validation issues
+        - Optional merged/adjusted segment if recovery was successful
+    """
+    issues = []
+    
+    if segment1.end <= segment2.start:
+        return issues, None  # No overlap
+        
+    # Report the overlap
+    issues.append(
+        ValidationIssue(
+            message=f"Segments overlap detected between {segment1.start}-{segment1.end} and {segment2.start}-{segment2.end}",
+            severity=ValidationSeverity.ERROR,
+            spec_ref="#segment-overlap",
+            error_code="SEGMENT_OVERLAP",
+        )
+    )
+    
+    # Try recovery strategies in order:
+    
+    # 1. Merge Strategy - if segments have compatible properties
+    if (_can_merge_segments(segment1, segment2)):
+        merged = _merge_segments(segment1, segment2)
+        issues.append(
+            ValidationIssue(
+                message="Segments merged to resolve overlap",
+                severity=ValidationSeverity.INFO,
+                suggestion="Review merged segment for accuracy",
+                error_code="SEGMENT_MERGED",
+            )
+        )
+        return issues, merged
+        
+    # 2. Adjust Strategy - modify end/start times
+    if abs(segment1.end - segment2.start) < 0.5:  # Small overlap
+        segment1.end = segment2.start
+        issues.append(
+            ValidationIssue(
+                message="Adjusted segment boundary to resolve small overlap",
+                severity=ValidationSeverity.WARNING,
+                suggestion="Verify adjusted timing is acceptable",
+                error_code="SEGMENT_ADJUSTED",
+            )
+        )
+        return issues, None
+        
+    # 3. Split Strategy - create new segment for overlap
+    overlap_start = segment2.start
+    overlap_end = segment1.end
+    
+    segment1.end = overlap_start
+    segment2.start = overlap_end
+    
+    # Create new segment for overlap region
+    overlap_segment = Segment(
+        text=f"{segment1.text} {segment2.text}",
+        start=overlap_start,
+        end=overlap_end,
+        speaker_id=segment1.speaker_id,  # Use properties from first segment
+        confidence=min(segment1.confidence, segment2.confidence) if segment1.confidence and segment2.confidence else None
+    )
+    
+    issues.append(
+        ValidationIssue(
+            message="Created new segment for overlap region",
+            severity=ValidationSeverity.WARNING,
+            suggestion="Review split segments and overlap handling",
+            error_code="SEGMENT_SPLIT",
+        )
+    )
+    
+    return issues, overlap_segment
+
+def _can_merge_segments(segment1: Segment, segment2: Segment) -> bool:
+    """Check if two segments can be safely merged."""
+    return (
+        segment1.speaker_id == segment2.speaker_id and
+        segment1.style_id == segment2.style_id and
+        segment1.language == segment2.language
+    )
+
+def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
+    """Merge two overlapping segments into one."""
+    return Segment(
+        text=f"{segment1.text} {segment2.text}",
+        start=min(segment1.start, segment2.start),
+        end=max(segment1.end, segment2.end),
+        speaker_id=segment1.speaker_id,
+        style_id=segment1.style_id,
+        language=segment1.language,
+        confidence=min(segment1.confidence, segment2.confidence) if segment1.confidence and segment2.confidence else None,
+        word_timing_mode=WordTimingMode.PARTIAL if segment1.words or segment2.words else None,
+        words=_merge_word_lists(segment1.words, segment2.words) if segment1.words and segment2.words else None
+    )
+
+def _merge_word_lists(words1: List[Word], words2: List[Word]) -> List[Word]:
+    """Merge two lists of words, preserving timing where possible."""
+    if not words1 or not words2:
+        return words1 or words2
+        
+    merged = []
+    # Add words with timing info
+    for word in words1 + words2:
+        if word.start is not None and word.end is not None:
+            merged.append(word)
+            
+    # Sort by start time
+    merged.sort(key=lambda w: w.start if w.start is not None else float('inf'))
+    return merged
