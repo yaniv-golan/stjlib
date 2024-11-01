@@ -177,5 +177,5 @@ def test_metadata_optional_created_at():
         "created_at": "2024-03-20T12:00:00Z",
     }
     metadata = Metadata.from_dict(data_with_timestamp)
-    expected_datetime = datetime.datetime(2024, 3, 20, 12, 0, tzinfo=datetime.timezone.utc)
+    expected_datetime = datetime(2024, 3, 20, 12, 0, tzinfo=timezone.utc)
     assert metadata.created_at == expected_datetime
