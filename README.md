@@ -23,10 +23,14 @@ Full documentation is available at [stjlib.readthedocs.io](https://stjlib.readth
 
 ## Features
 
-- Load and save STJ files
-- Validate STJ data according to the specification
-- Access and manipulate metadata and transcript data
-- Flexible error handling and validation reporting
+- Full support for STJ format version 0.6.0
+- Comprehensive validation system with severity levels (ERROR, WARNING, INFO)
+- Time value precision handling with IEEE 754 round-to-nearest-even
+- Strict language code validation (ISO 639-1/639-3)
+- Support for zero-duration segments
+- Word timing modes (complete, partial, none)
+- Enhanced speaker and style validation
+- Extensions field validation with reserved namespace protection
 
 ## Quick Start
 
@@ -41,28 +45,32 @@ pip install stjlib
 ```python
 from stjlib import StandardTranscriptionJSON
 
-# Load and validate an STJ file
+# Load and validate an existing STJ file
 stj = StandardTranscriptionJSON.from_file('path/to/file.stjson', validate=True)
 
-# Access metadata and transcript data
-print(stj.metadata)
-print(stj.transcript)
+# Or create a new STJ document
+stj = StandardTranscriptionJSON(version="0.6.0")
 
-# Add a segment with word timing
+# Add transcriber information
+stj.metadata.transcriber = {
+    "name": "TestTranscriber",
+    "version": "1.0"
+}
+
+# Add a simple segment
 segment = {
     "start": 0.0,
-    "end": 5.0,
-    "text": "Hello world",
-    "word_timing_mode": "complete",
-    "words": [
-        {"start": 0.0, "end": 1.0, "text": "Hello"},
-        {"start": 1.0, "end": 2.0, "text": "world"}
-    ]
+    "end": 2.0,
+    "text": "Hello world"
 }
 stj.transcript.segments.append(segment)
 
 # Save to file
-stj.to_file('output.stjson')
+stj.save('output.stjson')
+
+# Access metadata and transcript data
+print(stj.metadata)
+print(stj.transcript)
 ```
 
 For more examples and detailed usage instructions, please refer to our [documentation](https://stjlib.readthedocs.io/).
@@ -75,7 +83,18 @@ STJLib supports the Standard Transcription JSON (STJ) format with the following 
 - Alternative: `.stj`
 - Alternative: `.stj.json` (systems supporting double extensions)
 
-MIME Type: `application/vnd.stj+json` (fallback: `application/json`)
+MIME Type: `application/vnd.stj+json`
+
+## Validation Features
+
+- Severity levels: ERROR, WARNING, INFO
+- Detailed location information in error messages
+- Time value precision validation
+- Language code validation (ISO 639-1/639-3)
+- Segment ordering and overlap validation
+- Speaker and style validation
+- URI format validation
+- Extensions validation with namespace protection
 
 ## Development
 
