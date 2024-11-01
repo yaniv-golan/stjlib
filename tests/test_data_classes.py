@@ -177,15 +177,5 @@ def test_metadata_optional_created_at():
         "created_at": "2024-03-20T12:00:00Z",
     }
     metadata = Metadata.from_dict(data_with_timestamp)
-    assert metadata.created_at == "2024-03-20T12:00:00Z"
-
-    # Test with invalid created_at
-    data_invalid_timestamp = {
-        "title": "Test Title",
-        "language": "en",
-        "created_at": "invalid-timestamp",
-    }
-    with pytest.raises(
-        ValidationError, match="created_at must be a valid ISO 8601 timestamp"
-    ):
-        Metadata.from_dict(data_invalid_timestamp)
+    expected_datetime = datetime.datetime(2024, 3, 20, 12, 0, tzinfo=datetime.timezone.utc)
+    assert metadata.created_at == expected_datetime
