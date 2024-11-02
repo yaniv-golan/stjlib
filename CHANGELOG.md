@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Changed
+
+- Updated iso639-lang requirement to >=2.5.0
+- Improved language code validation to enforce ISO 639-1 when available
+- Enhanced error handling for invalid input types in metadata and transcript
+- Improved validation of transcript structure and segments
+- Better handling of empty speakers list to indicate attempted speaker identification
+- More robust validation of dictionary types throughout the codebase
+
+### Fixed
+
+- Fixed handling of invalid input types in STJ data structures
+- Improved validation messages for language codes
+- Better error handling for invalid metadata structures
+- Fixed validation of confidence scores
+- More precise error messages for invalid data types
+
 ## [0.4.0]
 
 ### Added

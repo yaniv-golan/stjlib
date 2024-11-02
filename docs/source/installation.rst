@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 * Python 3.7 or higher
-* iso639-lang>=2.4.2
+* iso639-lang>=2.5.0
 * jsonschema>=4.0.0  # For STJ schema validation
 
 File Format Support

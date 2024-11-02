@@ -4,6 +4,12 @@ STJLib: Standard Transcription JSON Format Handler
 A comprehensive implementation of the Standard Transcription JSON (STJ) format
 for representing transcribed audio and video data.
 
+Module Organization:
+    * Type definitions and type hints
+    * Exception classes for error handling
+    * Main STJ handler class
+    * Helper functions and utilities
+
 Key Features:
     * Complete STJ format implementation
     * Load and save STJ files with robust error handling
@@ -22,44 +28,77 @@ Example:
     ```python
     from stjlib import StandardTranscriptionJSON
 
-    # Load and validate an STJ file
-    stj = StandardTranscriptionJSON.from_file(
-        'transcript.stj.json',
-        validate=True
+    # Create new transcript
+    stj = StandardTranscriptionJSON(
+        metadata=Metadata(
+            transcriber=Transcriber(name="MyTranscriber", version="1.0")
+        )
     )
 
-    # Access transcript content
-    for segment in stj.transcript.segments:
-        print(f"{segment.start:.2f}-{segment.end:.2f}: {segment.text}")
-        if segment.speaker_id:
-            print(f"Speaker: {segment.speaker_id}")
+    # Adding content
+    stj.add_speaker("s1", "John")
+    stj.add_segment(
+        text="Hello world",
+        start=0.0,
+        end=1.5,
+        speaker_id="s1"
+    )
 
-    # Modify content
-    stj.transcript.segments[0].text = "Updated text"
-
-    # Save changes
-    stj.to_file('updated.stj.json')
+    # Loading existing data
+    existing = StandardTranscriptionJSON.from_file("transcript.stjson")
     ```
 
 Note:
-    This implementation follows version 0.6.x of the STJ specification.
     For detailed format information, see: https://github.com/yaniv-golan/STJ
 
-Version: 0.4.0
+Format Structure:
+    The STJ format wraps content in a root "stj" object:
+    {
+        "stj": {
+            "version": "0.6.0",
+            "metadata": {
+                "transcriber": {"name": str, "version": str},
+                "created_at": str,  # ISO 8601 UTC timestamp
+                ...
+            },
+            "transcript": {
+                "segments": [...],
+                "speakers": [...],
+                ...
+            }
+        }
+    }
 """
 
+# Standard library imports
 import json
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List, Iterator
 
+# Local imports
 from .core.data_classes import (
     STJ,
     Metadata,
     Transcript,
+    Segment,
+    Speaker,
 )
 from .validation import (
     ValidationIssue,
     validate_stj,
 )
+
+# Type definitions
+ValidationIssues = List[ValidationIssue]  # Type for validation result collections
+STJDict = Dict[str, Any]  # Type for STJ format dictionaries (with 'stj' root)
+SpeakerId = str  # Type for speaker identifiers used throughout the API
+_InternalDict = Dict[str, Any]  # Type for internal STJ structure (without 'stj' root)
+
+# Type usage examples:
+# -----------------------------
+# STJDict (format with root):
+#     {"stj": {"version": "0.6.0", ...}}
+# _InternalDict: {"version": "0.6.0", ...}
 
 
 class STJError(Exception):
@@ -121,240 +160,157 @@ class ValidationError(STJError):
 class StandardTranscriptionJSON:
     """Handler for Standard Transcription JSON (STJ) format.
 
-    This class provides the main interface for working with STJ documents,
-    including loading, saving, validation, and access to transcript content.
+    This class implements version 0.6.0 of the STJ specification, providing
+    a high-level interface for working with STJ documents.
 
-    Attributes:
-        stj (STJ): The root STJ object containing all transcript data
+    Format Structure:
+        The STJ format wraps content in a root "stj" object:
+        {
+            "stj": {
+                "version": "0.6.0",
+                "metadata": {
+                    "transcriber": {"name": str, "version": str},
+                    "created_at": str,  # ISO 8601 UTC timestamp
+                    ...
+                },
+                "transcript": {
+                    "segments": [...],
+                    "speakers": [...],
+                    ...
+                }
+            }
+        }
+
+    Features:
+        - Create new transcripts
+        - Load existing STJ files
+        - Add/modify transcript content
+        - Validate STJ data
+        - Save transcripts to files
 
     Example:
-        ```python
-        # Create from file
-        stj = StandardTranscriptionJSON.from_file(
-            "transcript.json",
-            validate=True
-        )
-
-        # Access content
-        print(f"Version: {stj.version}")
-        if stj.metadata:
-            print(f"Created: {stj.metadata.created_at}")
-
-        # Validate
-        issues = stj.validate(raise_exception=False)
-        if issues:
-            print("Validation issues found:")
-            for issue in issues:
-                print(issue)
-
-        # Save changes
-        stj.to_file("output.json")
-        ```
+        >>> stj = StandardTranscriptionJSON(
+        ...     metadata=Metadata(
+        ...         transcriber=Transcriber(name="MyTranscriber", version="1.0")
+        ...     )
+        ... )
+        >>> stj.add_speaker("s1", "John")
+        >>> stj.add_segment(text="Hello", start=0.0, end=1.5, speaker_id="s1")
 
     Note:
-        - All modifications are made directly to the internal STJ object
-        - Validation can be performed at any time
-        - File operations use UTF-8 encoding
+        The STJ format is a standardized way to represent transcribed audio/video
+        content with support for timing, speakers, and metadata.
     """
 
-    def __init__(self, stj: STJ):
-        """Initialize with an STJ object.
+    _SUPPORTED_VERSION = "0.6.0"
+
+    #
+    # Core interface
+    #
+    def __init__(
+        self,
+        metadata: Optional[Metadata] = None,
+        transcript: Optional[Transcript] = None,
+        validate: bool = False,
+    ):
+        """Create a new StandardTranscriptionJSON instance.
 
         Args:
-            stj (STJ): The root STJ object containing all transcript data
-        """
-        self.stj = stj
+            metadata: Optional metadata about the transcription. If None, metadata will be omitted entirely.
+            transcript: Optional transcript content. If None, creates empty transcript.
+            validate: Whether to validate the instance after creation
 
-    def validate(self, raise_exception: bool = True) -> Optional[List[ValidationIssue]]:
+        Raises:
+            ValidationError: If validate=True and the instance is invalid
+        """
+        self._stj = STJ(
+            version=self._SUPPORTED_VERSION,
+            metadata=metadata,  # Don't create default metadata when none is provided
+            transcript=transcript or Transcript(segments=[]),
+        )
+        if validate:
+            self.validate()
+
+    def validate(self, raise_exception: bool = True) -> Optional[ValidationIssues]:
         """Validates the STJ data according to specification requirements.
 
-        Performs comprehensive validation of the STJ data structure,
-        checking all requirements from the specification.
-
         Args:
-            raise_exception (bool): If True, raises ValidationError for any issues.
-                If False, returns the list of issues.
+            raise_exception: If True, raises ValidationError for any issues.
 
         Returns:
-            Optional[List[ValidationIssue]]: List of validation issues if
-                raise_exception is False and issues were found. None otherwise.
+            Optional[ValidationIssues]: List of validation issues if found, None if valid.
 
         Raises:
             ValidationError: If validation fails and raise_exception is True.
-
-        Example:
-            ```python
-            # Validate and handle issues
-            try:
-                stj.validate()
-                print("Validation passed")
-            except ValidationError as e:
-                print("Validation failed:")
-                for issue in e.issues:
-                    print(issue)
-
-            # Get issues without raising
-            issues = stj.validate(raise_exception=False)
-            if issues:
-                print("Found validation issues")
-            ```
         """
-        issues = validate_stj(self.stj)
-
+        issues = validate_stj(self._stj)
         if issues and raise_exception:
             raise ValidationError(issues)
-        return issues
+        return issues if issues else None
 
+    #
+    # File operations
+    #
     @classmethod
     def from_file(
-        cls, filename: str, validate: bool = False, raise_exception: bool = True
+        cls, filename: str, validate: bool = False
     ) -> "StandardTranscriptionJSON":
         """Creates a StandardTranscriptionJSON instance from a JSON file.
 
-        Loads and optionally validates an STJ document from a JSON file.
-
         Args:
-            filename (str): Path to the JSON file to load
-            validate (bool): Whether to validate the loaded data
-            raise_exception (bool): Whether to raise exceptions for validation issues
+            filename: Path to the JSON file to load
+            validate: Whether to validate the loaded data
 
         Returns:
             StandardTranscriptionJSON: New instance with loaded data
 
         Raises:
-            FileNotFoundError: If the file doesn't exist
-            json.JSONDecodeError: If the file contains invalid JSON
-            ValidationError: If validation fails and raise_exception is True
-            STJError: For other STJ-related errors
-
-        Example:
-            ```python
-            # Load and validate
-            try:
-                stj = StandardTranscriptionJSON.from_file(
-                    "transcript.json",
-                    validate=True
-                )
-            except FileNotFoundError:
-                print("File not found")
-            except json.JSONDecodeError:
-                print("Invalid JSON format")
-            except ValidationError as e:
-                print("Validation failed:", e)
-            ```
+            FileNotFoundError: If file doesn't exist
+            ValidationError: If validation fails or data structure is invalid
         """
         try:
             with open(filename, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
-            stj_instance = cls.from_dict(
-                data, validate=validate, raise_exception=raise_exception
-            )
-            return stj_instance
+            return cls.from_dict(data, validate=validate)
         except FileNotFoundError as e:
             raise FileNotFoundError(f"File not found: {filename}") from e
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(f"JSON decode error: {e.msg}", e.doc, e.pos)
-        except Exception as e:
-            raise STJError(
-                f"An unexpected error occurred while loading the file: {e}"
-            ) from e
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, Any], validate: bool = False, raise_exception: bool = True
+        cls, data: STJDict, validate: bool = False
     ) -> "StandardTranscriptionJSON":
-        """Creates a StandardTranscriptionJSON object from a dictionary.
-
-        Converts a dictionary containing STJ data into a StandardTranscriptionJSON
-        instance, optionally validating the data.
+        """Creates a StandardTranscriptionJSON instance from a dictionary.
 
         Args:
             data (Dict[str, Any]): Dictionary containing STJ data
-            validate (bool): Whether to validate the data
-            raise_exception (bool): Whether to raise exceptions for validation issues
+            validate (bool): Whether to validate the data (defaults to False)
 
         Returns:
-            StandardTranscriptionJSON: New instance with loaded data
+            StandardTranscriptionJSON: A new StandardTranscriptionJSON instance
 
         Raises:
-            ValidationError: If validation fails or data structure is invalid
-
-        Example:
-            ```python
-            # Create from dictionary
-            data = {
-                "stj": {
-                    "version": "0.6.0",
-                    "transcript": {
-                        "segments": [
-                            {"text": "Hello world", "start": 0.0, "end": 1.5}
-                        ]
-                    }
-                }
-            }
-            stj = StandardTranscriptionJSON.from_dict(data, validate=True)
-            ```
+            ValidationError: If validate=True and the data fails validation
         """
-        if not isinstance(data, dict):
-            raise ValidationError([ValidationIssue("STJ data must be a dictionary")])
+        # Create the STJ object
+        stj = STJ.from_dict(data)
+        instance = cls.create_from_stj(stj)
 
-        stj_data = data.get("stj")
-        if not isinstance(stj_data, dict):
-            raise ValidationError(
-                [ValidationIssue("STJ data must contain a 'stj' root object")]
-            )
-
-        version = stj_data.get("version")
-        if not version:
-            raise ValidationError([ValidationIssue("STJ version is required")])
-
-        # Extract known fields
-        known_fields = {"version", "metadata", "transcript"}
-        additional_fields = {k: v for k, v in stj_data.items() if k not in known_fields}
-
-        # Create Metadata and Transcript instances
-        metadata = (
-            Metadata.from_dict(stj_data.get("metadata"))
-            if "metadata" in stj_data
-            else None
-        )
-        transcript = Transcript.from_dict(stj_data.get("transcript"))
-
-        # Create the STJ instance with additional fields
-        stj = STJ(
-            version=version,
-            metadata=metadata,
-            transcript=transcript,
-            _additional_fields=additional_fields,
-        )
-
-        # Create the StandardTranscriptionJSON instance
-        stj_handler = cls(stj=stj)
-
+        # Validate if requested
         if validate:
-            stj_handler.validate(raise_exception=raise_exception)
+            instance.validate()
 
-        return stj_handler
+        return instance
 
     def to_file(self, filename: str) -> None:
         """Saves the STJ instance to a JSON file.
 
-        Serializes the STJ data to JSON format and writes it to a file.
-
         Args:
-            filename (str): Path where the JSON file should be written
+            filename: Path where the JSON file should be written
 
         Raises:
             IOError: If there's an error writing to the file
-
-        Example:
-            ```python
-            try:
-                stj.to_file("output.stj.json")
-                print("File saved successfully")
-            except IOError as e:
-                print(f"Error saving file: {e}")
-            ```
         """
         data = self.to_dict()
         try:
@@ -363,29 +319,44 @@ class StandardTranscriptionJSON:
         except IOError as e:
             raise IOError(f"Error writing to file {filename}: {e}")
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert the STJ object to a dictionary.
+    def to_dict(self) -> STJDict:
+        """Convert to STJ format dictionary.
 
         Returns:
-            Dict[str, Any]: Dictionary representation of the STJ data
-
-        Example:
-            ```python
-            # Convert to dictionary
-            data = stj.to_dict()
-            print(json.dumps(data, indent=2))
-            ```
+            STJDict: Dictionary in the STJ format with structure:
+            {
+                "stj": {
+                    "version": str,
+                    "metadata": Optional[Dict[str, Any]],
+                    "transcript": Dict[str, Any]
+                }
+            }
         """
-        return {"stj": self.stj.to_dict()}
+        raw_dict: _InternalDict = {
+            "version": self._stj.version,
+            "transcript": self._stj.transcript.to_dict(),
+        }
+        if self._stj.metadata is not None:
+            raw_dict["metadata"] = self._stj.metadata.to_dict()
 
+        return {"stj": raw_dict}
+
+    #
+    # Properties
+    #
     @property
     def metadata(self) -> Optional[Metadata]:
         """Access to the STJ metadata.
 
         Returns:
             Optional[Metadata]: The metadata object or None if not present
+
+        Raises:
+            ValueError: If STJ instance is not properly initialized
         """
-        return self.stj.metadata
+        if self._stj is None:
+            raise ValueError("STJ instance not properly initialized")
+        return self._stj.metadata
 
     @property
     def transcript(self) -> Transcript:
@@ -393,14 +364,155 @@ class StandardTranscriptionJSON:
 
         Returns:
             Transcript: The transcript object containing all content
-        """
-        return self.stj.transcript
 
-    @property
-    def version(self) -> str:
-        """Access to the STJ version.
+        Raises:
+            ValueError: If STJ instance is not properly initialized
+        """
+        if self._stj is None:
+            raise ValueError("STJ instance not properly initialized")
+        return self._stj.transcript
+
+    #
+    # Content manipulation
+    #
+    def add_segment(
+        self,
+        text: str,
+        start: Optional[float] = None,
+        end: Optional[float] = None,
+        *,
+        speaker_id: Optional[SpeakerId] = None,
+        language: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Add a new transcript segment.
+
+        Args:
+            text: The transcribed text
+            start: Start time in seconds
+            end: End time in seconds
+            speaker_id: Optional ID of the speaker
+            language: Optional language code
+            **kwargs: Additional segment properties
+
+        Raises:
+            ValueError: If text is empty or if end time is before start time
+        """
+        if not text or not text.strip():
+            raise ValueError("Segment text cannot be empty or contain only whitespace")
+
+        if start is not None and end is not None:
+            if end < start:
+                raise ValueError(
+                    "Segment end time must be greater than or equal to start time"
+                )
+
+        segment = Segment(
+            text=text,
+            start=start,
+            end=end,
+            speaker_id=speaker_id,
+            language=language,
+            **kwargs,
+        )
+        self._stj.transcript.segments.append(segment)
+
+    def add_speaker(self, id: SpeakerId, name: Optional[str] = None) -> None:
+        """Add a new speaker.
+
+        Args:
+            id: Unique speaker identifier
+            name: Optional display name for the speaker
+
+        Raises:
+            ValueError: If id is empty or if speaker with same id already exists
+        """
+        if not id or not id.strip():
+            raise ValueError("Speaker ID cannot be empty or contain only whitespace")
+
+        # Check for duplicate speaker id
+        existing_speakers = [s.id for s in self._stj.transcript.speakers]
+        if id in existing_speakers:
+            raise ValueError(f"Speaker with id '{id}' already exists")
+
+        speaker = Speaker(id=id, name=name)
+        self._stj.transcript.speakers.append(speaker)
+
+    def clear_segments(self) -> None:
+        """Remove all segments from the transcript."""
+        self._stj.transcript.segments = []
+
+    #
+    # Query methods
+    #
+    def get_speaker(self, speaker_id: SpeakerId) -> Optional[Speaker]:
+        """Get speaker by ID.
+
+        Args:
+            speaker_id: ID of the speaker to find
 
         Returns:
-            str: The STJ specification version
+            Optional[Speaker]: Speaker if found, None if not found
+
+        Raises:
+            ValueError: If speaker_id is empty or whitespace
         """
-        return self.stj.version
+        if not speaker_id or not speaker_id.strip():
+            raise ValueError("Speaker ID cannot be empty or contain only whitespace")
+
+        return next(
+            (s for s in self._stj.transcript.speakers if s.id == speaker_id), None
+        )
+
+    def get_segments_by_speaker(self, speaker_id: SpeakerId) -> List[Segment]:
+        """Get all segments for a specific speaker.
+
+        Args:
+            speaker_id: ID of the speaker to find segments for
+
+        Returns:
+            List[Segment]: List of segments with matching speaker_id. Empty list if none found.
+
+        Raises:
+            ValueError: If speaker_id is empty or whitespace
+        """
+        if not speaker_id or not speaker_id.strip():
+            raise ValueError("Speaker ID cannot be empty or contain only whitespace")
+
+        return [s for s in self._stj.transcript.segments if s.speaker_id == speaker_id]
+
+    #
+    # Internal helpers
+    #
+    @staticmethod
+    def _create_default_metadata() -> Metadata:
+        """Create default metadata with current timestamp.
+
+        Returns:
+            Metadata: A new metadata object with current UTC timestamp
+        """
+        return Metadata(created_at=datetime.now(timezone.utc))
+
+    @classmethod
+    def create_from_stj(cls, stj: STJ) -> "StandardTranscriptionJSON":
+        """Internal method to create instance from STJ object.
+
+        This method is used internally by:
+        - from_dict()
+        - from_file()
+
+        For new instances, use the constructor.
+
+        Args:
+            stj: An existing STJ object
+
+        Returns:
+            StandardTranscriptionJSON: New instance wrapping the STJ object
+
+        Note:
+            This is an internal method and should not be used directly.
+            Use the constructor for creating new instances.
+        """
+        instance = cls.__new__(cls)
+        instance._stj = stj
+        return instance

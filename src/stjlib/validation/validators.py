@@ -56,9 +56,8 @@ from enum import Enum, auto
 import math
 from decimal import Decimal, InvalidOperation
 
-from iso639 import Lang
-import iso639
-from iso639.exceptions import InvalidLanguageValue
+from iso639 import Lang, is_language
+from iso639.exceptions import InvalidLanguageValue, DeprecatedLanguageValue
 
 from ..core.data_classes import (
     STJ,
@@ -558,12 +557,31 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
 
     code = code.strip()
 
-    # Validate ISO 639-1 (2-letter) and ISO 639-3 (3-letter) codes
-    if len(code) == 2 or len(code) == 3:
-        try:
+    # Check if code is valid ISO 639-1 or ISO 639-3 code
+    if len(code) == 2:
+        if not is_language(code, identifiers_or_names="pt1"):
+            issues.append(
+                ValidationIssue(
+                    message=f"Invalid ISO 639-1 language code '{code}'.",
+                    location=location,
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#language-codes",
+                )
+            )
+    elif len(code) == 3:
+        if not is_language(code, identifiers_or_names="pt3"):
+            issues.append(
+                ValidationIssue(
+                    message=f"Invalid ISO 639-3 language code '{code}'.",
+                    location=location,
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#language-codes",
+                )
+            )
+        else:
+            # Enforce the use of ISO 639-1 code if available
             lang = Lang(code)
-            # Check if ISO 639-1 code exists but ISO 639-3 was used instead
-            if len(code) == 3 and lang.pt1:  # pt1 is the ISO 639-1 code
+            if lang.pt1:
                 issues.append(
                     ValidationIssue(
                         message=f"Must use ISO 639-1 code '{lang.pt1}' instead of ISO 639-3 code '{code}'.",
@@ -572,15 +590,6 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
                         spec_ref="#language-codes",
                     )
                 )
-        except (KeyError, InvalidLanguageValue):
-            issues.append(
-                ValidationIssue(
-                    message=f"Invalid language code '{code}'. Must be a valid ISO 639-1 or ISO 639-3 code.",
-                    location=location,
-                    severity=ValidationSeverity.ERROR,
-                    spec_ref="#language-codes",
-                )
-            )
     else:
         issues.append(
             ValidationIssue(
@@ -1738,33 +1747,50 @@ def validate_transcript(transcript: Optional[Transcript]) -> List[ValidationIssu
             ValidationIssue(
                 message="Missing required field: 'transcript'",
                 severity=ValidationSeverity.ERROR,
+                spec_ref="#transcript-field",
             )
         ]
 
-    # Validate speakers if present
-    if transcript.speakers is not None:
-        issues.extend(validate_speakers(transcript))
-
-    # Validate segments
-    if transcript.segments is None:
+    # Check for invalid segments type
+    if transcript._invalid_segments_type is not None:
         issues.append(
             ValidationIssue(
-                message="Missing required field: transcript.segments",
+                message=f"segments must be an array, got {transcript._invalid_segments_type}",
                 location="transcript.segments",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#segments-field",
             )
         )
-    elif not transcript.segments:
+        return issues
+
+    # Validate segments array is present and is an array
+    if not isinstance(transcript.segments, list):
         issues.append(
             ValidationIssue(
-                message="transcript.segments cannot be empty",
+                message="segments must be an array",
                 location="transcript.segments",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#segments-field",
+            )
+        )
+    elif not transcript.segments:  # Check if segments array is empty
+        issues.append(
+            ValidationIssue(
+                message="transcript.segments cannot be empty",  # Match expected error message
+                location="transcript.segments",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#empty-array-rules",
             )
         )
     else:
         issues.extend(validate_segments(transcript))
 
+    # Validate speakers if present
+    if transcript.speakers is not None:
+        issues.extend(validate_speakers(transcript))
+
     # Validate styles if present
-    if transcript.styles is not None:  # Only check for None
+    if transcript.styles is not None:
         issues.extend(validate_styles(transcript))
 
     return issues
@@ -2491,6 +2517,42 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
     # Validate metadata if present
     metadata = stj.metadata
     if metadata is not None:
+        # Check if we received invalid input type
+        if metadata._invalid_type is not None:
+            issues.append(
+                ValidationIssue(
+                    message=f"metadata must be a dictionary, got {metadata._invalid_type}",
+                    location="metadata",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#metadata-section",
+                )
+            )
+            return issues
+
+        if not isinstance(metadata, Metadata):
+            issues.append(
+                ValidationIssue(
+                    message="metadata must be a dictionary",
+                    location="metadata",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#metadata-section",
+                )
+            )
+            return issues
+
+        if metadata.transcriber is not None:
+            # Check if transcriber had invalid input type
+            if metadata.transcriber._invalid_type is not None:
+                issues.append(
+                    ValidationIssue(
+                        message=f"transcriber must be a dictionary, got {metadata.transcriber._invalid_type}",
+                        location="metadata.transcriber",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#metadata-section",
+                    )
+                )
+                return issues
+
         # Check for unexpected fields in metadata
         issues.extend(
             _check_unexpected_fields(
@@ -3179,12 +3241,37 @@ def validate_root_structure(stj: STJ) -> List[ValidationIssue]:
         )
         return issues
 
+    if stj._invalid_type is not None:
+        issues.append(
+            ValidationIssue(
+                message=f"STJ data must be a dictionary, got {stj._invalid_type}",
+                location="stj",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#stj-root",
+            )
+        )
+        return issues
+
+    # Proceed with the existing validation
     # Get the raw dictionary to check for unexpected fields
     stj_dict = stj.to_dict()
-    root_dict = stj_dict["stj"] if "stj" in stj_dict else stj_dict
+
+    # First check for stj root object
+    if "stj" not in stj_dict:
+        issues.append(
+            ValidationIssue(
+                message="STJ data must contain a 'stj' root object",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#stj-root",
+            )
+        )
+        return issues  # Return early if missing stj root
+
+    # Then check for unexpected fields
 
     # Check for unexpected fields directly - see implementation note above
     # for reason why we are not using _check_unexpected_fields()
+    root_dict = stj_dict["stj"]
     allowed_fields = {"version", "transcript", "metadata"}
     unexpected_fields = {
         k for k in root_dict.keys() if not k.startswith("_")
@@ -3245,31 +3332,35 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
     if issues:  # Stop if root structure is invalid
         return issues
 
-    # Field Validation
-    issues.extend(validate_types(stj))
-
-    # Reference Validation
-    issues.extend(validate_references(stj.transcript))
-
-    # Content Validation
+    # Version Validation
     issues.extend(validate_version(stj.version))
+    if issues:
+        return issues
 
-    # Validate metadata
-    if stj.metadata:
-        issues.extend(validate_metadata(stj.metadata))
-
-    # Validate transcript
+    # Validate transcript (including empty segments check)
     issues.extend(validate_transcript(stj.transcript))
 
-    # Validate language codes and consistency
-    issues.extend(validate_language_codes(stj.metadata, stj.transcript))
-    issues.extend(validate_language_consistency(stj.metadata, stj.transcript))
+    # Only proceed with other validations if basic structure is valid
+    if not issues:
+        # Field Validation
+        issues.extend(validate_types(stj))
 
-    # Validate confidence scores
-    issues.extend(validate_confidence_scores(stj.transcript))
+        # Reference Validation
+        issues.extend(validate_references(stj.transcript))
 
-    # Extensions Validation
-    issues.extend(validate_all_extensions(stj))
+        # Validate metadata if present
+        if stj.metadata:
+            issues.extend(validate_metadata(stj.metadata))
+
+        # Validate language codes and consistency
+        issues.extend(validate_language_codes(stj.metadata, stj.transcript))
+        issues.extend(validate_language_consistency(stj.metadata, stj.transcript))
+
+        # Validate confidence scores
+        issues.extend(validate_confidence_scores(stj.transcript))
+
+        # Extensions Validation
+        issues.extend(validate_all_extensions(stj))
 
     return issues
 

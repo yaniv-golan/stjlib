@@ -161,11 +161,11 @@ def test_stj_serialization():
 
 
 def test_metadata_optional_created_at():
+    """Test handling of optional created_at field in metadata."""
     # Test with created_at omitted
     data = {
         "title": "Test Title",
         "language": "en",
-        # created_at intentionally omitted
     }
     metadata = Metadata.from_dict(data)
     assert metadata.created_at is None

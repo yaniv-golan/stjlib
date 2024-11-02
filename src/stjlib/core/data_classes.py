@@ -131,6 +131,7 @@ class STJ:
         transcript (Transcript): Main content of the transcription
         metadata (Optional[Metadata]): Optional metadata about the transcription
         _additional_fields (Dict[str, Any]): Additional fields not included in the STJ structure
+        _invalid_type (Optional[str]): Type of invalid input for later validation
 
     Example:
         ```python
@@ -157,27 +158,35 @@ class STJ:
     """
 
     version: str
-    transcript: "Transcript"
+    transcript: Optional["Transcript"]
     metadata: Optional["Metadata"] = None
     _additional_fields: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _invalid_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "STJ":
-        """Creates an STJ instance from a dictionary."""
+    def from_dict(cls, data: Any) -> "STJ":
+        # For non-dict input, record the invalid type for later validation
+        if not isinstance(data, dict):
+            return cls(
+                version="",
+                transcript=None,
+                _invalid_type=type(data).__name__,
+            )
         # Handle wrapped STJ format
         if "stj" in data:
             data = data["stj"]
-
         # Extract known fields
         known_fields = {"version", "metadata", "transcript"}
         additional_fields = {k: v for k, v in data.items() if k not in known_fields}
 
         return cls(
-            version=data["version"],
+            version=data.get("version", ""),
             metadata=Metadata.from_dict(data["metadata"])
             if "metadata" in data
             else None,
-            transcript=Transcript.from_dict(data["transcript"]),
+            transcript=Transcript.from_dict(data.get("transcript"))
+            if "transcript" in data
+            else None,
             _additional_fields=additional_fields,
         )
 
@@ -227,13 +236,14 @@ class Transcriber:
 
     name: str
     version: str
+    _invalid_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Transcriber":
+    def from_dict(cls, data: Any) -> "Transcriber":
         """Creates a Transcriber instance from a dictionary.
 
         Args:
-            data (Dict[str, Any]): Dictionary containing transcriber data
+            data: Input that should be a dictionary containing transcriber data
 
         Returns:
             Transcriber: A new Transcriber instance
@@ -244,6 +254,10 @@ class Transcriber:
             transcriber = Transcriber.from_dict(data)
             ```
         """
+        # For non-dict input, return instance with type info for validation
+        if not isinstance(data, dict):
+            return cls(name="", version="", _invalid_type=type(data).__name__)
+
         return cls(
             name=data.get("name"),
             version=data.get("version"),
@@ -411,6 +425,9 @@ class Metadata:
     languages: Optional[List[str]] = None
     confidence_threshold: Optional[float] = None
     extensions: Optional[Dict[str, Any]] = None
+    _invalid_type: Optional[str] = field(
+        default=None, repr=False
+    )  # Store type of invalid input
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Metadata":
@@ -434,6 +451,10 @@ class Metadata:
             metadata = Metadata.from_dict(data)
             ```
         """
+        # For non-dict input, return instance with type info for validation
+        if not isinstance(data, dict):
+            return cls(_invalid_type=type(data).__name__)
+
         # Handle both 'Z' and '+00:00' timezone formats
         created_at_str = data.get("created_at")
         if created_at_str:
@@ -905,11 +926,15 @@ class Segment:
             segment = Segment.from_dict(data)
             ```
         """
+
+        if not isinstance(data, dict):
+            data = {}  # Convert non-dict input to empty dict to preserve data
+
         return cls(
             start=data.get("start"),
             end=data.get("end"),
             is_zero_duration=data.get("is_zero_duration"),
-            text=data["text"],
+            text=data.get("text", ""),  # Provide default for required field
             speaker_id=data.get("speaker_id"),
             confidence=data.get("confidence"),
             language=_deserialize_language(data.get("language")),
@@ -981,10 +1006,16 @@ class Transcript:
     Attributes:
         speakers (List[Speaker]): List of speakers in the transcript.
             Each speaker has a unique ID and optional metadata.
+            Empty list indicates speaker identification was attempted but found none.
+            Non-empty list indicates speakers were found.
         segments (List[Segment]): List of transcript segments.
             Segments contain the actual transcribed content with timing.
+            Must not be empty.
         styles (Optional[List[Style]]): Optional list of text formatting styles.
-            Styles can be referenced by segments for formatting.
+            Styles can be referenced by segments for formatting. Can be:
+            - None: Style processing was not attempted
+            - Empty list: Style processing performed but no styles defined
+            - List of styles: One or more styles defined
 
     Example:
         ```python
@@ -1000,6 +1031,21 @@ class Transcript:
                     end=1.5,
                     speaker_id="S1"
                 )
+            ]
+        )
+
+        # Create a transcript where speaker identification found none
+        transcript = Transcript(
+            speakers=[],  # Empty list indicates attempted but none found
+            segments=[
+                Segment(text="Hello world")
+            ]
+        )
+
+        # Create a basic transcript (implicitly attempts speaker identification)
+        transcript = Transcript(
+            segments=[
+                Segment(text="Hello world")
             ]
         )
 
@@ -1035,15 +1081,20 @@ class Transcript:
 
     Note:
         - segments list must not be empty
-        - speakers list can be empty but speaker references must be valid
-        - styles are optional but style references must be valid if present
+        - speakers list will be empty if none found, non-empty if speakers found
+        - styles can be:
+          - None: style processing not attempted
+          - Empty list: styles were processed but none defined
+          - List with items: styles were defined
         - segments must be ordered by time and must not overlap
         - all IDs must be unique within their respective lists
+        - if speakers/styles are included, references to them must be valid
     """
 
-    speakers: List[Speaker] = field(default_factory=list)
     segments: List[Segment] = field(default_factory=list)
+    speakers: List[Speaker] = field(default_factory=list)
     styles: Optional[List[Style]] = None
+    _invalid_segments_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Transcript":
@@ -1051,15 +1102,19 @@ class Transcript:
 
         Args:
             data (Dict[str, Any]): Dictionary containing transcript data with fields:
-                - speakers (optional): List of speaker data
+                - speakers (optional): List of speaker data. Treated as empty list
+                  if key missing (indicating speaker identification attempted but
+                  none found)
                 - segments (required): List of segment data
-                - styles (optional): List of style data
+                - styles (optional): List of style data. If key missing, treated
+                  as "not attempted". If present but empty, treated as "none defined"
 
         Returns:
             Transcript: A new Transcript instance
 
         Example:
             ```python
+            # Transcript with speakers found
             data = {
                 "speakers": [{"id": "S1", "name": "John"}],
                 "segments": [{
@@ -1069,12 +1124,37 @@ class Transcript:
                     "speaker_id": "S1"
                 }]
             }
+
+            # Transcript where speaker identification found none
+            data = {
+                "speakers": [],  # Empty list = none found
+                "segments": [{
+                    "text": "Hello",
+                    "start": 0.0,
+                    "end": 1.0
+                }]
+            }
+
+            # Basic transcript (implicitly attempts speaker identification)
+            data = {
+                "segments": [{
+                    "text": "Hello",
+                    "start": 0.0,
+                    "end": 1.0
+                }]
+            }
+
             transcript = Transcript.from_dict(data)
             ```
         """
+
+        segments = data.get("segments", [])
+        if not isinstance(segments, list):
+            return cls(segments=[], _invalid_segments_type=type(segments).__name__)
+
         return cls(
+            segments=[Segment.from_dict(s) for s in segments],
             speakers=[Speaker.from_dict(s) for s in data.get("speakers", [])],
-            segments=[Segment.from_dict(s) for s in data.get("segments", [])],
             styles=[Style.from_dict(s) for s in data["styles"]]
             if "styles" in data
             else None,
@@ -1085,23 +1165,36 @@ class Transcript:
 
         Returns:
             Dict[str, Any]: Dictionary containing transcript data.
-            Always includes speakers and segments, styles if present.
+            Always includes segments and speakers (even if empty).
+            Styles included only if style processing was attempted.
 
         Example:
             ```python
+            # Basic transcript (implicitly attempted speaker identification)
+            transcript = Transcript(
+                segments=[Segment(text="Hello")]
+            )
+            # Result includes empty speakers list:
+            # {"speakers": [], "segments": [...]}
+
+            # Transcript with speakers found
             transcript = Transcript(
                 speakers=[Speaker(id="S1", name="John")],
                 segments=[
                     Segment(text="Hello", start=0.0, end=1.0, speaker_id="S1")
                 ]
             )
-            data = transcript.to_dict()
+            # Result includes non-empty speakers list:
+            # {"speakers": [{"id": "S1", "name": "John"}], "segments": [...]}
             ```
         """
         result = {
-            "speakers": [s.to_dict() for s in self.speakers],
             "segments": [s.to_dict() for s in self.segments],
+            "speakers": [s.to_dict() for s in self.speakers],
         }
+
+        # Only include styles if processing was attempted
         if self.styles is not None:
             result["styles"] = [s.to_dict() for s in self.styles]
+
         return result
