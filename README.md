@@ -1,8 +1,14 @@
 # STJLib
 
 [![PyPI](https://img.shields.io/pypi/v/stjlib)](https://pypi.org/project/stjlib/)
+[![Python Version](https://img.shields.io/pypi/pyversions/stjlib)](https://pypi.org/project/stjlib/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://github.com/yaniv-golan/stjlib/actions/workflows/python-package.yml/badge.svg)](https://github.com/yaniv-golan/stjlib/actions)
 [![Documentation Status](https://readthedocs.org/projects/stjlib/badge/?version=latest)](https://stjlib.readthedocs.io/latest/?badge=latest)
+[![Downloads](https://img.shields.io/pypi/dm/stjlib)](https://pypi.org/project/stjlib/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![GitHub issues](https://img.shields.io/github/issues/yaniv-golan/stjlib)](https://github.com/yaniv-golan/stjlib/issues)
+[![GitHub stars](https://img.shields.io/github/stars/yaniv-golan/stjlib?style=social)](https://github.com/yaniv-golan/stjlib)
 
 A Python library for the Standard Transcription JSON (STJ) format.
 
