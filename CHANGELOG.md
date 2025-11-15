@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.4] - Unreleased
+_No changes yet._
+
+## [0.6.4] - 2025-11-15
 
 ### Changed
 
 - Dropped support for Python 3.8. STJLib now requires Python 3.9 or newer.
+- Added automated release workflow via GitHub Actions & PyPI Trusted Publishing.
+- Bumped development tooling (DeepDiff 8.6.1+, Black 24.3+) to address upstream
+  vulnerabilities.
 
 ## [0.6.0] - 2025-11-15
 

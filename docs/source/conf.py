@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 try:
     from stjlib import __version__ as _stj_version
 except Exception:
-    _stj_version = "0.6.0"
+    _stj_version = "0.6.4"
 
 release = _stj_version
 
