@@ -116,6 +116,10 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+### Releasing
+
+Releases are automated via GitHub Actions and PyPI Trusted Publishing. See `docs/internal/release-process.md` for the exact steps (update changelog/version, tag `vX.Y.Z`, and push—CI handles the rest).
+
 ### Building Documentation Locally
 
 ```bash
