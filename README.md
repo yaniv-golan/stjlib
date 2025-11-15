@@ -10,7 +10,7 @@ A Python library for the Standard Transcription JSON (STJ) format.
 
 **STJLib** provides data classes and utilities for working with STJ files, which are used to represent transcribed audio and video data in a structured, machine-readable JSON format.
 
-For more information about the STJ format, please refer to the [STJ Specification](https://github.com/yaniv-golan/STJ).
+For more information about the STJ format, please refer to the [STJ Specification](https://yaniv-golan.github.io/STJ/).
 
 ## Documentation
 
