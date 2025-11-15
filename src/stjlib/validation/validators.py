@@ -3597,9 +3597,11 @@ def _handle_segment_overlap(
         start=overlap_start,
         end=overlap_end,
         speaker_id=segment1.speaker_id,  # Use properties from first segment
-        confidence=min(confidence1, confidence2)
-        if confidence1 is not None and confidence2 is not None
-        else None,
+        confidence=(
+            min(confidence1, confidence2)
+            if confidence1 is not None and confidence2 is not None
+            else None
+        ),
     )
 
     issues.append(
@@ -3634,15 +3636,19 @@ def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
         speaker_id=segment1.speaker_id,
         style_id=segment1.style_id,
         language=segment1.language,
-        confidence=min(confidence1, confidence2)
-        if confidence1 is not None and confidence2 is not None
-        else None,
-        word_timing_mode=WordTimingMode.PARTIAL
-        if segment1.words or segment2.words
-        else None,
-        words=_merge_word_lists(segment1.words, segment2.words)
-        if segment1.words and segment2.words
-        else None,
+        confidence=(
+            min(confidence1, confidence2)
+            if confidence1 is not None and confidence2 is not None
+            else None
+        ),
+        word_timing_mode=(
+            WordTimingMode.PARTIAL if segment1.words or segment2.words else None
+        ),
+        words=(
+            _merge_word_lists(segment1.words, segment2.words)
+            if segment1.words and segment2.words
+            else None
+        ),
     )
 
 

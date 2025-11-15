@@ -39,7 +39,7 @@ Example:
             )
         ]
     )
-    
+
     stj = STJ(
         version="0.6.1",
         transcript=transcript
@@ -47,7 +47,7 @@ Example:
 
     # Serialize to dictionary
     data = stj.to_dict()
-    
+
     # Deserialize from dictionary
     stj = STJ.from_dict(data)
     ```
@@ -184,12 +184,14 @@ class STJ:
 
         return cls(
             version=data.get("version", ""),
-            metadata=Metadata.from_dict(data["metadata"])
-            if "metadata" in data
-            else None,
-            transcript=Transcript.from_dict(data.get("transcript"))
-            if "transcript" in data
-            else None,
+            metadata=(
+                Metadata.from_dict(data["metadata"]) if "metadata" in data else None
+            ),
+            transcript=(
+                Transcript.from_dict(data.get("transcript"))
+                if "transcript" in data
+                else None
+            ),
             _additional_fields=additional_fields,
         )
 
@@ -479,9 +481,11 @@ class Metadata:
             created_at = None
 
         return cls(
-            transcriber=Transcriber.from_dict(data["transcriber"])
-            if "transcriber" in data
-            else None,
+            transcriber=(
+                Transcriber.from_dict(data["transcriber"])
+                if "transcriber" in data
+                else None
+            ),
             created_at=created_at,
             source=Source.from_dict(data["source"]) if "source" in data else None,
             languages=_deserialize_languages(data.get("languages")),
