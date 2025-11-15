@@ -7,4 +7,4 @@ pytest-cov==4.0.0      # Coverage plugin for pytest
 isort==5.13.2
 sphinx
 sphinx_rtd_theme
-deepdiff==5.8.1
+deepdiff==8.6.1
