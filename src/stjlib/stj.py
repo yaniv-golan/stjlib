@@ -73,7 +73,7 @@ Format Structure:
 # Standard library imports
 import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List, Iterator
+from typing import Optional, Dict, Any, List
 
 # Local imports
 from .core.data_classes import (

@@ -61,7 +61,6 @@ Note:
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from iso639.exceptions import InvalidLanguageValue
 from .enums import WordTimingMode
 
 

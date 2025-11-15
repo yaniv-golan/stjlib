@@ -47,17 +47,15 @@ Note:
 """
 
 from dataclasses import dataclass, fields, asdict
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_EVEN
+from datetime import datetime
+from decimal import Decimal, ROUND_HALF_EVEN, InvalidOperation
 import re
 from typing import Any, Dict, List, Optional, Union, Type, Callable, Tuple
 from urllib.parse import urlparse, urljoin
 from enum import Enum, auto
-import math
-from decimal import Decimal, InvalidOperation
 
 from iso639 import Lang, is_language
-from iso639.exceptions import InvalidLanguageValue, DeprecatedLanguageValue
+from iso639.exceptions import InvalidLanguageValue
 
 from ..core.data_classes import (
     MISSING,
@@ -215,7 +213,7 @@ def validate_metadata(metadata: Metadata) -> List[ValidationIssue]:
         ```python
         metadata = Metadata(
             transcriber=Transcriber(name="MyTranscriber", version="1.0"),
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now()
         )
         issues = validate_metadata(metadata)
         ```
@@ -379,7 +377,10 @@ def validate_version(version: str) -> List[ValidationIssue]:
         if not re.match(semver_pattern, version):
             issues.append(
                 ValidationIssue(
-                    message=f"Invalid 'stj.version' format: '{version}'. Must follow semantic versioning 'MAJOR.MINOR.PATCH' (e.g., '0.6.1').",
+                    message=(
+                        f"Invalid 'stj.version' format: '{version}'. Must follow semantic "
+                        "versioning 'MAJOR.MINOR.PATCH' (e.g., '0.6.1')."
+                    ),
                     location="stj.version",
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#stj-version-format",
@@ -605,7 +606,10 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
     else:
         issues.append(
             ValidationIssue(
-                message=f"Invalid language code '{code}'. Language codes must be 2-letter (ISO 639-1) or 3-letter (ISO 639-3) codes.",
+                message=(
+                    f"Invalid language code '{code}'. Language codes must be 2-letter "
+                    "(ISO 639-1) or 3-letter (ISO 639-3) codes."
+                ),
                 location=location,
                 severity=ValidationSeverity.ERROR,
                 spec_ref="#language-codes",
@@ -736,7 +740,6 @@ def validate_language_consistency(
                     )
 
                 # Track the language for consistency checking
-                primary = lang.pt1 or lang.pt3
                 entry = language_code_map.setdefault(
                     lang.name.lower(), {"codes": set(), "locations": set()}
                 )
@@ -765,7 +768,11 @@ def validate_language_consistency(
         if has_part1 and has_part3:
             issues.append(
                 ValidationIssue(
-                    message=f"Inconsistent language codes used for '{language}': {', '.join(sorted(codes))}. Must use consistent codes throughout the file.",
+                    message=(
+                        f"Inconsistent language codes used for '{language}': "
+                        f"{', '.join(sorted(codes))}. Must use consistent codes "
+                        "throughout the file."
+                    ),
                     location=", ".join(sorted(data["locations"])),
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#language-codes",
@@ -774,7 +781,11 @@ def validate_language_consistency(
         elif len(codes) > 1:  # Multiple different codes used for same language
             issues.append(
                 ValidationIssue(
-                    message=f"Inconsistent language codes used for '{language}': {', '.join(sorted(codes))}. Must use consistent codes throughout the file.",
+                    message=(
+                        f"Inconsistent language codes used for '{language}': "
+                        f"{', '.join(sorted(codes))}. Must use consistent codes "
+                        "throughout the file."
+                    ),
                     location=", ".join(sorted(data["locations"])),
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#language-codes",
@@ -1430,7 +1441,10 @@ def _validate_word_timing_mode(
             except ValueError:
                 issues.append(
                     ValidationIssue(
-                        message=f"Invalid word_timing_mode '{word_timing_mode}'. Must be one of 'complete', 'partial', or 'none'.",
+                        message=(
+                            f"Invalid word_timing_mode '{word_timing_mode}'. Must be one "
+                            "of 'complete', 'partial', or 'none'."
+                        ),
                         location=f"transcript.segments[{segment_idx}].word_timing_mode",
                         severity=ValidationSeverity.ERROR,
                         spec_ref="#word-timing-mode-field",
@@ -1440,7 +1454,10 @@ def _validate_word_timing_mode(
         elif not isinstance(word_timing_mode, WordTimingMode):
             issues.append(
                 ValidationIssue(
-                    message=f"Invalid word_timing_mode '{word_timing_mode}'. Must be a string or WordTimingMode Enum.",
+                    message=(
+                        f"Invalid word_timing_mode '{word_timing_mode}'. Must be a "
+                        "string or WordTimingMode Enum."
+                    ),
                     location=f"transcript.segments[{segment_idx}].word_timing_mode",
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#word-timing-mode-field",
@@ -1730,7 +1747,11 @@ def validate_speaker_id(speaker_id: str, location: str) -> List[ValidationIssue]
     if not re.match(SPEAKER_ID_PATTERN, speaker_id):
         issues.append(
             ValidationIssue(
-                message=f"Invalid 'speaker_id' format '{speaker_id}'. Must be 1 to {MAX_SPEAKER_ID_LENGTH} characters long, containing only letters, digits, underscores, or hyphens.",
+                message=(
+                    f"Invalid 'speaker_id' format '{speaker_id}'. Must be 1 to "
+                    f"{MAX_SPEAKER_ID_LENGTH} characters long, containing only "
+                    "letters, digits, underscores, or hyphens."
+                ),
                 location=location,
                 severity=ValidationSeverity.ERROR,
                 spec_ref="#speaker-id-format",
@@ -2198,7 +2219,11 @@ def _validate_style(
     if style.id is not None and not re.match(r"^[A-Za-z0-9_-]{1,64}$", style.id):
         issues.append(
             ValidationIssue(
-                message=f"Invalid style ID format: {style.id}. Must contain only letters, digits, underscores, or hyphens, with length between 1 and 64 characters.",
+                message=(
+                    f"Invalid style ID format: {style.id}. Must contain only "
+                    "letters, digits, underscores, or hyphens, with length between 1 "
+                    "and 64 characters."
+                ),
                 location=f"{location}.id",
                 severity=ValidationSeverity.ERROR,
                 spec_ref="#style-id-format",
@@ -2972,7 +2997,10 @@ def validate_styles(transcript: Transcript) -> List[ValidationIssue]:
                 if align_value not in VALID_ALIGN_VALUES:
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid align value: {align_value}. Must be one of: {', '.join(VALID_ALIGN_VALUES)}",
+                            message=(
+                                f"Invalid align value: {align_value}. Must be one of: "
+                                f"{', '.join(VALID_ALIGN_VALUES)}"
+                            ),
                             location=f"transcript.styles[{idx}].display.align",
                         )
                     )
@@ -2983,7 +3011,10 @@ def validate_styles(transcript: Transcript) -> List[ValidationIssue]:
                 if vertical_value not in VALID_VERTICAL_VALUES:
                     issues.append(
                         ValidationIssue(
-                            message=f"Invalid vertical value: {vertical_value}. Must be one of: {', '.join(VALID_VERTICAL_VALUES)}",
+                            message=(
+                                f"Invalid vertical value: {vertical_value}. Must be one "
+                                f"of: {', '.join(VALID_VERTICAL_VALUES)}"
+                            ),
                             location=f"transcript.styles[{idx}].display.vertical",
                         )
                     )
@@ -3080,7 +3111,11 @@ def validate_style_id(style_id: str, location: str) -> List[ValidationIssue]:
     if not re.match(r"^[A-Za-z0-9_-]{1,64}$", style_id):
         issues.append(
             ValidationIssue(
-                message=f"Invalid 'style_id' format '{style_id}'. Must be 1 to 64 characters long, containing only letters, digits, underscores, or hyphens.",
+                message=(
+                    f"Invalid 'style_id' format '{style_id}'. Must be 1 to 64 "
+                    "characters long, containing only letters, digits, underscores, "
+                    "or hyphens."
+                ),
                 location=location,
                 severity=ValidationSeverity.ERROR,
                 spec_ref="#style-id-format",
