@@ -5,11 +5,10 @@ Requirements
 ------------
 * Python 3.7 or higher
 * iso639-lang>=2.5.0
-* jsonschema>=4.0.0  # For STJ schema validation
 
 File Format Support
 ------------------
-STJLib supports the Standard Transcription JSON (STJ) format version 0.6.0 with the following file extensions:
+STJLib supports the Standard Transcription JSON (STJ) format version 0.6.1 with the following file extensions:
 
 * Primary (Recommended): ``.stjson``
 * Alternative: ``.stj``

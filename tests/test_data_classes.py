@@ -130,11 +130,11 @@ def test_stj_serialization():
         word_timing_mode=WordTimingMode.COMPLETE,
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=metadata, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=metadata, transcript=transcript)
     data = stj_instance.to_dict()
     expected = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": "TestTranscriber", "version": "1.0"},
                 "created_at": "2023-01-01T00:00:00Z",
@@ -179,3 +179,38 @@ def test_metadata_optional_created_at():
     metadata = Metadata.from_dict(data_with_timestamp)
     expected_datetime = datetime(2024, 3, 20, 12, 0, tzinfo=timezone.utc)
     assert metadata.created_at == expected_datetime
+
+
+def test_metadata_empty_serializes_to_empty_object():
+    """Empty metadata should serialize to an empty JSON object."""
+    metadata = Metadata()
+    assert metadata.to_dict() == {}
+
+
+def test_segment_confidence_null_round_trip():
+    """Explicit None confidence should serialize as JSON null."""
+    segment = Segment(text="Test", start=0.0, end=1.0, confidence=None)
+    data = segment.to_dict()
+    assert "confidence" in data
+    assert data["confidence"] is None
+    recovered = Segment.from_dict(data)
+    assert recovered.confidence is None
+
+
+def test_word_confidence_null_round_trip():
+    """Word confidence None should be preserved through serialization."""
+    word = Word(text="hello", start=0.0, end=0.5, confidence=None)
+    data = word.to_dict()
+    assert "confidence" in data
+    assert data["confidence"] is None
+    recovered = Word.from_dict(data)
+    assert recovered.confidence is None
+
+
+def test_segment_extensions_empty_dict_preserved():
+    """Empty extensions dictionaries should round-trip unchanged."""
+    segment = Segment(text="Test", extensions={})
+    data = segment.to_dict()
+    assert "extensions" in data and data["extensions"] == {}
+    recovered = Segment.from_dict(data)
+    assert recovered.extensions == {}

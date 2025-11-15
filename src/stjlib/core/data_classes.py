@@ -41,7 +41,7 @@ Example:
     )
     
     stj = STJ(
-        version="0.6.0",
+        version="0.6.1",
         transcript=transcript
     )
 
@@ -63,6 +63,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 from iso639.exceptions import InvalidLanguageValue
 from .enums import WordTimingMode
+
+
+MISSING = object()
 
 
 def _deserialize_language(code: Optional[str]) -> Optional[str]:
@@ -127,7 +130,7 @@ class STJ:
     transcript, and optional metadata.
 
     Attributes:
-        version (str): STJ specification version (e.g., "0.6.0")
+        version (str): STJ specification version (e.g., "0.6.1")
         transcript (Transcript): Main content of the transcription
         metadata (Optional[Metadata]): Optional metadata about the transcription
         _additional_fields (Dict[str, Any]): Additional fields not included in the STJ structure
@@ -137,7 +140,7 @@ class STJ:
         ```python
         # Create a basic STJ document
         stj = STJ(
-            version="0.6.0",
+            version="0.6.1",
             transcript=transcript,
             metadata=Metadata(
                 transcriber=Transcriber(name="MyTranscriber", version="1.0")
@@ -324,7 +327,8 @@ class Source:
     uri: Optional[str] = None
     duration: Optional[float] = None
     languages: Optional[List[str]] = None
-    extensions: Dict[str, Any] = field(default_factory=dict)
+    extensions: Optional[Dict[str, Any]] = None
+    _invalid_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Source":
@@ -346,11 +350,14 @@ class Source:
             source = Source.from_dict(data)
             ```
         """
+        if not isinstance(data, dict):
+            return cls(_invalid_type=type(data).__name__)
+
         return cls(
             uri=data.get("uri"),
             duration=data.get("duration"),
             languages=_deserialize_languages(data.get("languages")),
-            extensions=data.get("extensions", {}),
+            extensions=data["extensions"] if "extensions" in data else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -373,7 +380,7 @@ class Source:
             result["duration"] = self.duration
         if self.languages is not None:
             result["languages"] = self.languages
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
         return result
 
@@ -518,9 +525,9 @@ class Metadata:
             result["languages"] = self.languages
         if self.confidence_threshold is not None:
             result["confidence_threshold"] = self.confidence_threshold
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
-        return result if result else None
+        return result
 
 
 @dataclass
@@ -569,7 +576,7 @@ class Speaker:
 
     id: str
     name: Optional[str] = None
-    extensions: Dict[str, Any] = field(default_factory=dict)
+    extensions: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Speaker":
@@ -594,9 +601,8 @@ class Speaker:
             speaker = Speaker.from_dict(data)
             ```
         """
-        return cls(
-            id=data["id"], name=data.get("name"), extensions=data.get("extensions", {})
-        )
+        extensions = data["extensions"] if "extensions" in data else None
+        return cls(id=data["id"], name=data.get("name"), extensions=extensions)
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the Speaker instance to a dictionary.
@@ -615,7 +621,7 @@ class Speaker:
         result = {"id": self.id}
         if self.name is not None:
             result["name"] = self.name
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
         return result
 
@@ -681,7 +687,7 @@ class Style:
     id: str
     text: Optional[Dict[str, Any]] = None
     display: Optional[Dict[str, Any]] = None
-    extensions: Dict[str, Any] = field(default_factory=dict)
+    extensions: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Style":
@@ -697,7 +703,7 @@ class Style:
             id=data["id"],
             text=data.get("text"),
             display=data.get("display"),
-            extensions=data.get("extensions", {}),
+            extensions=data["extensions"] if "extensions" in data else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -711,7 +717,7 @@ class Style:
             result["text"] = self.text
         if self.display is not None:
             result["display"] = self.display
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
         return result
 
@@ -758,12 +764,13 @@ class Word:
         - is_zero_duration must be True if start equals end
     """
 
-    text: str
+    text: Optional[str]
     start: Optional[float] = None
     end: Optional[float] = None
     is_zero_duration: Optional[bool] = None
-    confidence: Optional[float] = None
-    extensions: Dict[str, Any] = field(default_factory=dict)
+    confidence: Optional[float] = field(default=MISSING)
+    extensions: Optional[Dict[str, Any]] = None
+    _invalid_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Word":
@@ -792,13 +799,17 @@ class Word:
             word = Word.from_dict(data)
             ```
         """
+        if not isinstance(data, dict):
+            return cls(text=None, _invalid_type=type(data).__name__)
+
+        confidence = data["confidence"] if "confidence" in data else MISSING
         return cls(
             start=data.get("start"),
             end=data.get("end"),
             is_zero_duration=data.get("is_zero_duration"),
-            text=data["text"],
-            confidence=data.get("confidence"),
-            extensions=data.get("extensions", {}),
+            text=data.get("text"),
+            confidence=confidence,
+            extensions=data["extensions"] if "extensions" in data else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -822,9 +833,9 @@ class Word:
             result["end"] = self.end
         if self.is_zero_duration is not None:
             result["is_zero_duration"] = self.is_zero_duration
-        if self.confidence is not None:
+        if self.confidence is not MISSING:
             result["confidence"] = self.confidence
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
         return result
 
@@ -882,17 +893,19 @@ class Segment:
         - language must be a valid ISO code if present
     """
 
-    text: str
+    text: Optional[str]
     start: Optional[float] = None
     end: Optional[float] = None
     is_zero_duration: Optional[bool] = None
     speaker_id: Optional[str] = None
-    confidence: Optional[float] = None
+    confidence: Optional[float] = field(default=MISSING)
     language: Optional[str] = None
     style_id: Optional[str] = None
     word_timing_mode: Optional[Union[WordTimingMode, str]] = None
     words: Optional[List["Word"]] = None
     extensions: Optional[Dict[str, Any]] = None
+    _invalid_type: Optional[str] = field(default=None, repr=False)
+    _invalid_words_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Segment":
@@ -928,24 +941,41 @@ class Segment:
         """
 
         if not isinstance(data, dict):
-            data = {}  # Convert non-dict input to empty dict to preserve data
+            return cls(text=None, _invalid_type=type(data).__name__)
 
+        words_data = data.get("words")
+        words = None
+        invalid_words_type = None
+        if isinstance(words_data, list):
+            words = [Word.from_dict(w) for w in words_data]
+        elif words_data is not None:
+            invalid_words_type = type(words_data).__name__
+
+        word_timing_mode_value = data.get("word_timing_mode")
+        if isinstance(word_timing_mode_value, WordTimingMode):
+            word_timing_mode = word_timing_mode_value
+        elif isinstance(word_timing_mode_value, str):
+            try:
+                word_timing_mode = WordTimingMode(word_timing_mode_value.lower())
+            except ValueError:
+                word_timing_mode = word_timing_mode_value
+        else:
+            word_timing_mode = word_timing_mode_value
+
+        confidence = data["confidence"] if "confidence" in data else MISSING
         return cls(
             start=data.get("start"),
             end=data.get("end"),
             is_zero_duration=data.get("is_zero_duration"),
-            text=data.get("text", ""),  # Provide default for required field
+            text=data.get("text"),
             speaker_id=data.get("speaker_id"),
-            confidence=data.get("confidence"),
+            confidence=confidence,
             language=_deserialize_language(data.get("language")),
             style_id=data.get("style_id"),
-            word_timing_mode=WordTimingMode(data["word_timing_mode"])
-            if "word_timing_mode" in data
-            else None,
-            words=[Word.from_dict(w) for w in data["words"]]
-            if "words" in data
-            else None,
+            word_timing_mode=word_timing_mode,
+            words=words,
             extensions=data.get("extensions"),
+            _invalid_words_type=invalid_words_type,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -975,7 +1005,7 @@ class Segment:
             result["is_zero_duration"] = self.is_zero_duration
         if self.speaker_id is not None:
             result["speaker_id"] = self.speaker_id
-        if self.confidence is not None:
+        if self.confidence is not MISSING:
             result["confidence"] = self.confidence
         if self.language is not None:
             result["language"] = self.language
@@ -990,7 +1020,7 @@ class Segment:
             )
         if self.words is not None:
             result["words"] = [w.to_dict() for w in self.words]
-        if self.extensions:
+        if self.extensions is not None:
             result["extensions"] = self.extensions
         return result
 
@@ -1095,6 +1125,9 @@ class Transcript:
     speakers: List[Speaker] = field(default_factory=list)
     styles: Optional[List[Style]] = None
     _invalid_segments_type: Optional[str] = field(default=None, repr=False)
+    _invalid_type: Optional[str] = field(default=None, repr=False)
+    _invalid_speakers_type: Optional[str] = field(default=None, repr=False)
+    _invalid_styles_type: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Transcript":
@@ -1148,16 +1181,37 @@ class Transcript:
             ```
         """
 
+        if not isinstance(data, dict):
+            return cls(_invalid_type=type(data).__name__)
+
         segments = data.get("segments", [])
         if not isinstance(segments, list):
             return cls(segments=[], _invalid_segments_type=type(segments).__name__)
 
+        speakers_data = data.get("speakers", [])
+        invalid_speakers_type = None
+        if not isinstance(speakers_data, list):
+            invalid_speakers_type = type(speakers_data).__name__
+            speakers = []
+        else:
+            speakers = [Speaker.from_dict(s) for s in speakers_data]
+
+        styles = None
+        invalid_styles_type = None
+        if "styles" in data:
+            styles_data = data["styles"]
+            if isinstance(styles_data, list):
+                styles = [Style.from_dict(s) for s in styles_data]
+            else:
+                invalid_styles_type = type(styles_data).__name__
+                styles = None
+
         return cls(
             segments=[Segment.from_dict(s) for s in segments],
-            speakers=[Speaker.from_dict(s) for s in data.get("speakers", [])],
-            styles=[Style.from_dict(s) for s in data["styles"]]
-            if "styles" in data
-            else None,
+            speakers=speakers,
+            styles=styles,
+            _invalid_speakers_type=invalid_speakers_type,
+            _invalid_styles_type=invalid_styles_type,
         )
 
     def to_dict(self) -> Dict[str, Any]:

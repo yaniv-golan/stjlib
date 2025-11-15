@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+_No changes yet._
+
+## [0.6.0] - 2025-11-15
+
+### Changed
+
+- Bumped the default STJ specification version to 0.6.1, ensuring documentation, tests, and runtime defaults all reference the latest spec patch release.
+- Enforced STJ 0.6.1 validation requirements for non-empty `languages` arrays, uniform segment timing once any segment is timed, stricter word timing/text alignment (including partial mode), and preservation of confidence-null semantics.
+- Updated core data classes to retain explicit `null` confidence values plus intentionally empty metadata/extension objects during serialization.
+- Expanded validator and data-class test coverage to capture the new compliance rules.
+- Data-class loaders now preserve malformed input for validation instead of raising, and validation reporting covers bad speaker/style/word arrays even when inputs are arbitrary types.
+- Validation pipeline now reports all issues in one run (no short-circuiting after version/root errors) and word/segment text comparisons normalize punctuation/whitespace to avoid noisy warnings.
+- `StandardTranscriptionJSON.to_dict()` delegates to the underlying STJ object so unknown root fields survive round-trips; docs now pick up the real package version automatically.
+- Removed the unused `jsonschema` dependency mention from installation docs and added the missing Code of Conduct referenced by CONTRIBUTING.
+- Test harness inserts `src/` on `sys.path` automatically for pytest, guaranteeing tests run from a fresh checkout without manual PYTHONPATH tweaks.
+
 ## [0.5.0]
 
 ### Changed

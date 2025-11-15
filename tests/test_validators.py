@@ -42,7 +42,7 @@ def test_validate_version():
 
 def test_validate_missing_transcript():
     """Test validation when transcript is missing."""
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=None)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=None)
     issues = validate_stj(stj_instance)
     assert any(
         "Missing required field: 'transcript'" in issue.message for issue in issues
@@ -52,7 +52,7 @@ def test_validate_missing_transcript():
 def test_validate_empty_segments():
     """Test validation when segments are empty."""
     stj_instance = STJ(
-        version="0.6.0", metadata=None, transcript=Transcript(segments=[])
+        version="0.6.1", metadata=None, transcript=Transcript(segments=[])
     )
     issues = validate_stj(stj_instance)
     assert any(
@@ -71,7 +71,7 @@ def test_validate_invalid_time_format():
         word_timing_mode="complete",
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
     assert any("Time value must be non-negative" in issue.message for issue in issues)
 
@@ -84,7 +84,7 @@ def test_validate_metadata():
         confidence_threshold=2.0,  # Out of range should fail
     )
     stj_instance = STJ(
-        version="0.6.0",
+        version="0.6.1",
         metadata=metadata,
         transcript=Transcript(segments=[Segment(text="Test segment")]),
     )
@@ -99,6 +99,18 @@ def test_validate_metadata():
     )
 
 
+def test_metadata_source_languages_empty_list_invalid():
+    """Empty metadata.source.languages arrays should raise errors."""
+    metadata = Metadata(source=Source(languages=[]))
+    stj_instance = STJ(
+        version="0.6.1",
+        metadata=metadata,
+        transcript=Transcript(segments=[Segment(text="Test segment")]),
+    )
+    issues = validate_stj(stj_instance)
+    assert any("metadata.source.languages" in issue.location for issue in issues)
+
+
 def test_validate_word_timing_modes():
     """Test validation of word timing modes."""
     # Test complete word timing mode with missing timing
@@ -109,7 +121,7 @@ def test_validate_word_timing_modes():
     )
     transcript_incomplete = Transcript(segments=[segment_incomplete])
     stj_incomplete = STJ(
-        version="0.6.0", metadata=None, transcript=transcript_incomplete
+        version="0.6.1", metadata=None, transcript=transcript_incomplete
     )
     issues_incomplete = validate_stj(stj_incomplete)
 
@@ -117,6 +129,96 @@ def test_validate_word_timing_modes():
         "timing data when word_timing_mode is 'complete'" in issue.message
         for issue in issues_incomplete
     )
+
+
+def test_metadata_languages_empty_list():
+    """Empty metadata languages array should be invalid."""
+    metadata = Metadata(languages=[])
+    stj_instance = STJ(
+        version="0.6.1",
+        metadata=metadata,
+        transcript=Transcript(segments=[Segment(text="Test")]),
+    )
+    issues = validate_stj(stj_instance)
+    assert any("metadata.languages" in issue.message for issue in issues)
+
+
+def test_segments_must_share_timing_state():
+    """Mixed timed/untimed segments must raise validation errors."""
+    transcript = Transcript(
+        segments=[
+            Segment(text="First", start=0.0, end=1.0),
+            Segment(text="Second"),
+        ]
+    )
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
+    issues = validate_stj(stj_instance)
+    assert any("must include 'start' and 'end'" in issue.message for issue in issues)
+
+
+def test_partial_word_timing_requires_start_end():
+    """Words in partial mode must provide timing data."""
+    segment = Segment(
+        text="Hello world",
+        word_timing_mode=WordTimingMode.PARTIAL,
+        words=[Word(text="Hello", start=None, end=None)],
+    )
+    transcript = Transcript(segments=[segment])
+    stj_instance = STJ(version="0.6.1", transcript=transcript, metadata=None)
+    issues = validate_stj(stj_instance)
+    assert any(
+        "Words must include timing data when word_timing_mode is 'partial'"
+        in issue.message
+        for issue in issues
+    )
+
+
+def test_word_text_alignment_complete_mode_enforces_exact_match():
+    """Complete mode requires concatenated words to match segment text."""
+    segment = Segment(
+        text="Hello World",
+        word_timing_mode=WordTimingMode.COMPLETE,
+        start=0.0,
+        end=1.0,
+        words=[
+            Word(text="Hello", start=0.0, end=0.5),
+            Word(text="world", start=0.5, end=1.0),
+        ],
+    )
+    transcript = Transcript(segments=[segment])
+    stj_instance = STJ(version="0.6.1", transcript=transcript, metadata=None)
+    issues = validate_stj(stj_instance)
+    assert any("Segment text must match" in issue.message for issue in issues)
+
+
+def test_word_text_alignment_partial_order_enforced():
+    """Partial mode requires word texts to appear in order."""
+    segment = Segment(
+        text="Hello world",
+        word_timing_mode=WordTimingMode.PARTIAL,
+        start=0.0,
+        end=2.0,
+        words=[
+            Word(text="world", start=0.5, end=1.0),
+            Word(text="Hello", start=1.0, end=1.5),
+        ],
+    )
+    transcript = Transcript(segments=[segment])
+    stj_instance = STJ(version="0.6.1", transcript=transcript, metadata=None)
+    issues = validate_stj(stj_instance)
+    assert any("does not match the segment text order" in issue.message for issue in issues)
+
+
+def test_invalid_word_timing_mode_string():
+    """Ensure invalid word_timing_mode strings surface validation issues."""
+    segment = Segment(text="Test segment", word_timing_mode="INVALID", words=[])
+    transcript = Transcript(segments=[segment])
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
+    issues = validate_stj(stj_instance)
+
+    assert any(
+        "Invalid word_timing_mode" in issue.message for issue in issues
+    ), "Expected invalid word_timing_mode issue"
 
 
 def test_validate_overlapping_segments():
@@ -127,7 +229,7 @@ def test_validate_overlapping_segments():
             Segment(text="Second", start=1.0, end=3.0),  # Overlaps with first segment
         ]
     )
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any("Segments must not overlap" in issue.message for issue in issues)
@@ -139,7 +241,7 @@ def test_validate_style_references():
         segments=[Segment(text="Test", style_id="non_existent_style")],
         styles=[Style(id="existing_style")],
     )
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -158,7 +260,7 @@ def test_validate_extensions():
         },
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -179,7 +281,7 @@ def test_validate_zero_duration():
         words=[Word(text="Test", start=1.0, end=1.0, is_zero_duration=False)],
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -201,7 +303,7 @@ def test_validate_confidence_scores():
         end=1.0,
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -218,7 +320,7 @@ def test_validate_speaker_references():
         segments=[Segment(text="Test", speaker_id="non_existent_speaker")],
         speakers=[Speaker(id="existing_speaker", name="Test Speaker")],
     )
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -242,12 +344,11 @@ def test_validate_segment_text_matches_words():
         ],
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
-        "Segment text does not match concatenated word texts" in issue.message
-        for issue in issues
+        "must match concatenated word texts" in issue.message for issue in issues
     )
 
 
@@ -261,7 +362,7 @@ def test_validate_word_timing_sequence():
         ],
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -280,7 +381,7 @@ def test_validate_unique_ids():
         ],
         styles=[Style(id="style1"), Style(id="style1")],  # Duplicate ID
     )
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any("Duplicate speaker ID: speaker1" in issue.message for issue in issues)
@@ -295,7 +396,7 @@ def test_validate_decimal_precision():
         end=Decimal("2.0"),
     )
     transcript = Transcript(segments=[segment])
-    stj_instance = STJ(version="0.6.0", metadata=None, transcript=transcript)
+    stj_instance = STJ(version="0.6.1", metadata=None, transcript=transcript)
     issues = validate_stj(stj_instance)
 
     assert any(
@@ -310,7 +411,7 @@ def test_validate_time_formats():
 
     def create_stj_with_time(time_value):
         return STJ(
-            version="0.6.0",
+            version="0.6.1",
             transcript=Transcript(
                 segments=[
                     # Use time_value for both start and end to avoid exceeding max
@@ -365,7 +466,7 @@ def test_invalid_additional_properties():
     """Test validation of unexpected fields in root object."""
     stj_data = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "unexpected_field": "unexpected",  # Invalid additional property
             "transcript": {
                 "segments": [{"start": 0.0, "end": 5.0, "text": "Sample text"}]
@@ -388,7 +489,7 @@ def test_validate_invalid_iso639_1_code():
         languages=["xx"],  # Invalid ISO 639-1 code
     )
     stj_instance = STJ(
-        version="0.6.0",
+        version="0.6.1",
         metadata=metadata,
         transcript=Transcript(segments=[Segment(text="Test")]),
     )
@@ -405,7 +506,7 @@ def test_validate_iso639_3_code_with_iso639_1_available():
         languages=["eng"],  # Should use 'en' instead
     )
     stj_instance = STJ(
-        version="0.6.0",
+        version="0.6.1",
         metadata=metadata,
         transcript=Transcript(segments=[Segment(text="Test")]),
     )
@@ -417,3 +518,43 @@ def test_validate_iso639_3_code_with_iso639_1_available():
         "Must use ISO 639-1 code 'en' instead of ISO 639-3 code 'eng'" in msg
         for msg in messages
     )
+
+
+def test_word_entries_must_be_dictionaries():
+    """Non-dictionary word entries should be reported instead of raising."""
+    stj_data = {
+        "stj": {
+            "version": "0.6.1",
+            "transcript": {
+                "segments": [
+                    {
+                        "text": "Hello",
+                        "start": 0.0,
+                        "end": 1.0,
+                        "words": ["not-a-dict"],
+                    }
+                ]
+            },
+        }
+    }
+    stj_instance = STJ.from_dict(stj_data)
+    issues = validate_stj(stj_instance)
+
+    assert any(
+        ".words[0]" in issue.location and "must be a dictionary" in issue.message
+        for issue in issues
+    )
+
+
+def test_validation_returns_multiple_sections():
+    """Version errors should not stop metadata validation."""
+    metadata = Metadata(transcriber=Transcriber(name=" ", version="1.0"))
+    stj_instance = STJ(
+        version="0.7.0",
+        metadata=metadata,
+        transcript=Transcript(segments=[Segment(text="Test")]),
+    )
+    issues = validate_stj(stj_instance)
+
+    assert any("Incompatible version" in issue.message for issue in issues)
+    assert any("transcriber.name" in issue.message for issue in issues)

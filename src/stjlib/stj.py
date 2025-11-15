@@ -55,7 +55,7 @@ Format Structure:
     The STJ format wraps content in a root "stj" object:
     {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": str, "version": str},
                 "created_at": str,  # ISO 8601 UTC timestamp
@@ -97,8 +97,8 @@ _InternalDict = Dict[str, Any]  # Type for internal STJ structure (without 'stj'
 # Type usage examples:
 # -----------------------------
 # STJDict (format with root):
-#     {"stj": {"version": "0.6.0", ...}}
-# _InternalDict: {"version": "0.6.0", ...}
+#     {"stj": {"version": "0.6.1", ...}}
+# _InternalDict: {"version": "0.6.1", ...}
 
 
 class STJError(Exception):
@@ -160,14 +160,14 @@ class ValidationError(STJError):
 class StandardTranscriptionJSON:
     """Handler for Standard Transcription JSON (STJ) format.
 
-    This class implements version 0.6.0 of the STJ specification, providing
+    This class implements version 0.6.1 of the STJ specification, providing
     a high-level interface for working with STJ documents.
 
     Format Structure:
         The STJ format wraps content in a root "stj" object:
         {
             "stj": {
-                "version": "0.6.0",
+                "version": "0.6.1",
                 "metadata": {
                     "transcriber": {"name": str, "version": str},
                     "created_at": str,  # ISO 8601 UTC timestamp
@@ -202,7 +202,7 @@ class StandardTranscriptionJSON:
         content with support for timing, speakers, and metadata.
     """
 
-    _SUPPORTED_VERSION = "0.6.0"
+    _SUPPORTED_VERSION = "0.6.1"
 
     #
     # Core interface
@@ -332,14 +332,7 @@ class StandardTranscriptionJSON:
                 }
             }
         """
-        raw_dict: _InternalDict = {
-            "version": self._stj.version,
-            "transcript": self._stj.transcript.to_dict(),
-        }
-        if self._stj.metadata is not None:
-            raw_dict["metadata"] = self._stj.metadata.to_dict()
-
-        return {"stj": raw_dict}
+        return self._stj.to_dict()
 
     #
     # Properties

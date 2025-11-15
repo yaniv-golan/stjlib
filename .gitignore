@@ -168,3 +168,5 @@ yaniv.txt
 !CODE_OF_CONDUCT.md
 .vscode/settings.json
 repopack-output.txt
+
+docs/internal

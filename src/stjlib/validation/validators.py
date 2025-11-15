@@ -26,7 +26,7 @@ Example:
     from stjlib.core import STJ
 
     # Load or create an STJ object
-    stj = STJ(version="0.6.0", transcript=transcript_data)
+    stj = STJ(version="0.6.1", transcript=transcript_data)
 
     # Validate the STJ data
     validation_issues = validate_stj(stj)
@@ -60,6 +60,7 @@ from iso639 import Lang, is_language
 from iso639.exceptions import InvalidLanguageValue, DeprecatedLanguageValue
 
 from ..core.data_classes import (
+    MISSING,
     STJ,
     Metadata,
     Transcript,
@@ -81,7 +82,6 @@ MAX_SPEAKER_ID_LENGTH = 64
 SPEAKER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 NAMESPACE_PATTERN = r"^[a-z0-9\-]+$"
 SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
-TEXT_NORMALIZATION_PATTERN = r"[^\w\s]"
 URI_INVALID_CHARS_PATTERN = r"[^\w\-\.~:/?#\[\]@!$&\'()*+,;=%]"
 
 # Reserved namespaces
@@ -318,7 +318,7 @@ def validate_metadata(metadata: Metadata) -> List[ValidationIssue]:
                     metadata.source.languages, "metadata.source.languages"
                 )
             )
-        if metadata.source.extensions:
+        if metadata.source.extensions is not None:
             issues.extend(
                 validate_extensions(
                     metadata.source.extensions, "metadata.source.extensions"
@@ -332,7 +332,7 @@ def validate_metadata(metadata: Metadata) -> List[ValidationIssue]:
         )
 
     # Validate metadata extensions
-    if metadata.extensions:
+    if metadata.extensions is not None:
         issues.extend(validate_extensions(metadata.extensions, "metadata.extensions"))
 
     return issues
@@ -345,7 +345,7 @@ def validate_version(version: str) -> List[ValidationIssue]:
     and is compatible with the supported STJ specification version (0.6.x).
 
     Args:
-        version (str): Version string to validate (e.g., "0.6.0")
+        version (str): Version string to validate (e.g., "0.6.1")
 
     Returns:
         List[ValidationIssue]: List of validation issues found. Empty list if valid.
@@ -379,7 +379,7 @@ def validate_version(version: str) -> List[ValidationIssue]:
         if not re.match(semver_pattern, version):
             issues.append(
                 ValidationIssue(
-                    message=f"Invalid 'stj.version' format: '{version}'. Must follow semantic versioning 'MAJOR.MINOR.PATCH' (e.g., '0.6.0').",
+                    message=f"Invalid 'stj.version' format: '{version}'. Must follow semantic versioning 'MAJOR.MINOR.PATCH' (e.g., '0.6.1').",
                     location="stj.version",
                     severity=ValidationSeverity.ERROR,
                     spec_ref="#stj-version-format",
@@ -544,7 +544,19 @@ def validate_language_code(code: str, location: str) -> List[ValidationIssue]:
     """
     issues = []
 
-    if not isinstance(code, str) or not code.strip():
+    # Ensure 'code' is a string
+    if not isinstance(code, str):
+        issues.append(
+            ValidationIssue(
+                message="Language code must be a single string.",
+                location=location,
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#language-codes",
+            )
+        )
+        return issues
+
+    if not code.strip():
         issues.append(
             ValidationIssue(
                 message="Language code must be a non-empty string.",
@@ -920,6 +932,16 @@ def validate_time_format(
     return issues
 
 
+def _has_confidence_value(value: Optional[float]) -> bool:
+    """Determine if a confidence field contains a numeric value."""
+    return value is not MISSING and value is not None
+
+
+def _confidence_numeric_value(value: Optional[float]) -> Optional[float]:
+    """Return numeric confidence value if present."""
+    return value if _has_confidence_value(value) else None
+
+
 def validate_confidence_scores(
     transcript: Optional[Transcript],
 ) -> List[ValidationIssue]:
@@ -956,7 +978,7 @@ def validate_confidence_scores(
         return issues
 
     for idx, segment in enumerate(transcript.segments or []):
-        if segment.confidence is not None:
+        if _has_confidence_value(segment.confidence):
             if not (0.0 <= segment.confidence <= 1.0):
                 issues.append(
                     ValidationIssue(
@@ -968,7 +990,7 @@ def validate_confidence_scores(
                 )
 
         for word_idx, word in enumerate(segment.words or []):
-            if word.confidence is not None:
+            if _has_confidence_value(word.confidence):
                 if not (0.0 <= word.confidence <= 1.0):
                     issues.append(
                         ValidationIssue(
@@ -1088,6 +1110,8 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
 
     segments = transcript.segments or []
     previous_end = -1.0  # Initialize previous_end to a negative value
+    any_segment_timed = False
+    segments_without_timing: List[int] = []
 
     for idx, segment in enumerate(segments):
         location = f"transcript.segments[{idx}]"
@@ -1105,6 +1129,10 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
                     spec_ref="#segment-times",
                 )
             )
+
+        has_timing = has_start and has_end
+        if has_timing:
+            any_segment_timed = True
 
         if has_start and has_end:
             # Validate time formats first
@@ -1149,6 +1177,7 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
                 previous_end = segment.end
 
         else:
+            segments_without_timing.append(idx)
             # If 'start' and 'end' are absent, 'is_zero_duration' must not be present
             if segment.is_zero_duration:
                 issues.append(
@@ -1179,7 +1208,19 @@ def validate_segments(transcript: Transcript) -> List[ValidationIssue]:
                 validate_language_code(segment.language, f"{location}.language")
             )
 
+    if any_segment_timed:
+        for idx in segments_without_timing:
+            issues.append(
+                ValidationIssue(
+                    message="All segments must include 'start' and 'end' when any segment includes timing information.",
+                    location=f"transcript.segments[{idx}]",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#segment-time-fields",
+                )
+            )
+
     return issues
+    # (function continues)
 
 
 def validate_words_in_segment(
@@ -1260,6 +1301,26 @@ def validate_words_in_segment(
                         spec_ref="#word-timing-mode-field",
                     )
                 )
+    elif effective_word_timing_mode == WordTimingMode.PARTIAL:
+        if not words:
+            issues.append(
+                ValidationIssue(
+                    message="word_timing_mode 'partial' must include non-empty words array",
+                    location=location,
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#word-timing-mode-field",
+                )
+            )
+        for word_idx, word in enumerate(words):
+            if word.start is None or word.end is None:
+                issues.append(
+                    ValidationIssue(
+                        message="Words must include timing data when word_timing_mode is 'partial'",
+                        location=f"{location}.words[{word_idx}]",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#word-timing-mode-field",
+                    )
+                )
 
     # Validate individual words
     for word_idx, word in enumerate(words):
@@ -1305,20 +1366,15 @@ def validate_words_in_segment(
     # Validate word timings and order
     issues.extend(_validate_word_timings(segment, segment_idx, words))
 
-    # Validate word text consistency when effective mode is COMPLETE
-    if effective_word_timing_mode == WordTimingMode.COMPLETE:
-        # Join word texts with single spaces, comparing ignoring case
-        concatenated_word_text = " ".join(word.text for word in words).lower()
-        segment_text = segment.text.lower()
-        if concatenated_word_text != segment_text:
-            issues.append(
-                ValidationIssue(
-                    message="Segment text does not match concatenated word texts",
-                    location=location,
-                    severity=ValidationSeverity.WARNING,
-                    spec_ref="#word-timing-mode-field",
-                )
+    if effective_word_timing_mode in (
+        WordTimingMode.COMPLETE,
+        WordTimingMode.PARTIAL,
+    ):
+        issues.extend(
+            _validate_word_text_alignment(
+                segment, segment_idx, words, effective_word_timing_mode
             )
+        )
 
     return issues
 
@@ -1435,6 +1491,16 @@ def _validate_word_timing_mode(
                         spec_ref="#word-timing-mode-field",
                     )
                 )
+            for word_idx, word in enumerate(words):
+                if word.start is None or word.end is None:
+                    issues.append(
+                        ValidationIssue(
+                            message="Words must include timing data when word_timing_mode is 'partial'",
+                            location=f"transcript.segments[{segment_idx}].words[{word_idx}]",
+                            severity=ValidationSeverity.ERROR,
+                            spec_ref="#word-timing-mode-field",
+                        )
+                    )
 
     # Determine implicit word timing mode when not specified
     elif words is not None:  # words array present but no mode specified
@@ -1570,38 +1636,60 @@ def _validate_word_timings(
     return issues
 
 
-def _validate_word_text_consistency(
-    segment: Segment, segment_idx: int, words: List[Word]
+def _normalize_interword_whitespace(text: str) -> str:
+    """Remove whitespace between words while preserving punctuation and case."""
+    return "".join(text.split())
+
+
+def _validate_word_text_alignment(
+    segment: Segment,
+    segment_idx: int,
+    words: List[Word],
+    mode: Optional[WordTimingMode],
 ) -> List[ValidationIssue]:
-    """
-    Validate consistency between segment text and concatenated word texts.
-    According to the spec, the concatenation of words[].text SHOULD match segment.text,
-    accounting for whitespace and punctuation.
-    """
-    issues = []
-    concatenated_words = " ".join(word.text for word in words)
+    """Validate that word texts align with segment text according to mode rules."""
+    issues: List[ValidationIssue] = []
 
-    # Normalize texts by removing extra whitespace and punctuation
-    segment_text = re.sub(TEXT_NORMALIZATION_PATTERN, "", segment.text)
-    segment_text = " ".join(segment_text.split())
+    if segment.text is None or not words:
+        return issues
 
-    words_text = re.sub(TEXT_NORMALIZATION_PATTERN, "", concatenated_words)
-    words_text = " ".join(words_text.split())
+    segment_text = segment.text
+    search_pos = 0
 
-    # Perform case-insensitive comparison
-    if segment_text.lower() != words_text.lower():
-        issues.append(
-            ValidationIssue(
-                message=(
-                    f"Segment text does not match concatenated word texts "
-                    f"(accounting for whitespace and punctuation). "
-                    f"Segment: '{segment.text}', Words: '{concatenated_words}'"
-                ),
-                location=f"transcript.segments[{segment_idx}]",
-                severity=ValidationSeverity.WARNING,
-                spec_ref="#word-timing-mode-field",
+    for word_idx, word in enumerate(words):
+        word_text = word.text or ""
+        found_pos = segment_text.find(word_text, search_pos)
+        if found_pos == -1:
+            issues.append(
+                ValidationIssue(
+                    message=(
+                        f"Word text '{word_text}' does not match the segment text order."
+                    ),
+                    location=f"transcript.segments[{segment_idx}].words[{word_idx}].text",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#word-timing-mode-field",
+                )
             )
+        else:
+            search_pos = found_pos + len(word_text)
+
+    if mode == WordTimingMode.COMPLETE:
+        normalized_segment = _normalize_interword_whitespace(segment_text)
+        normalized_words = _normalize_interword_whitespace(
+            "".join(word.text or "" for word in words)
         )
+        if normalized_segment != normalized_words:
+            issues.append(
+                ValidationIssue(
+                    message=(
+                        "Segment text must match concatenated word texts when "
+                        "word_timing_mode is 'complete' (ignoring only inter-word whitespace)."
+                    ),
+                    location=f"transcript.segments[{segment_idx}].words",
+                    severity=ValidationSeverity.ERROR,
+                    spec_ref="#word-timing-mode-field",
+                )
+            )
 
     return issues
 
@@ -1703,7 +1791,7 @@ def validate_speakers(transcript: Transcript) -> List[ValidationIssue]:
                     )
                 speaker_ids.add(speaker.id)
 
-                if speaker.extensions:
+                if speaker.extensions is not None:
                     issues.extend(
                         validate_extensions(
                             speaker.extensions, f"transcript.speakers[{idx}].extensions"
@@ -1821,6 +1909,9 @@ def _validate_optional_field(
         - Type checking is strict (no automatic conversion)
         - For numeric types, Decimal is accepted where float/int is expected
     """
+    if value is MISSING:
+        return
+
     if value is not None and not isinstance(value, expected_type):
         issues.append(
             ValidationIssue(
@@ -2350,6 +2441,17 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
         )
         return issues
 
+    if getattr(transcript, "_invalid_type", None):
+        issues.append(
+            ValidationIssue(
+                message=f"transcript must be a dictionary, got {transcript._invalid_type}",
+                location="stj.transcript",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#transcript-field",
+            )
+        )
+        return issues
+
     # Check for unexpected fields in transcript
     issues.extend(
         _check_unexpected_fields(
@@ -2358,7 +2460,16 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
     )
 
     # Validate transcript speakers
-    if transcript.speakers is not None:
+    if transcript._invalid_speakers_type is not None:
+        issues.append(
+            ValidationIssue(
+                message=f"'speakers' must be an array, got {transcript._invalid_speakers_type}",
+                location="transcript.speakers",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#speakers-field",
+            )
+        )
+    elif transcript.speakers is not None:
         _validate_list_field(
             transcript.speakers,
             "transcript.speakers",
@@ -2369,7 +2480,16 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
         )
 
     # Validate transcript styles
-    if transcript.styles is not None:
+    if transcript._invalid_styles_type is not None:
+        issues.append(
+            ValidationIssue(
+                message=f"'styles' must be an array, got {transcript._invalid_styles_type}",
+                location="transcript.styles",
+                severity=ValidationSeverity.ERROR,
+                spec_ref="#styles-field",
+            )
+        )
+    elif transcript.styles is not None:
         _validate_list_field(
             transcript.styles,
             "transcript.styles",
@@ -2395,6 +2515,17 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
                 issues.append(
                     ValidationIssue(
                         message=f"{location} cannot be None",
+                        location=location,
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#segments-array",
+                    )
+                )
+                continue
+
+            if getattr(segment, "_invalid_type", None):
+                issues.append(
+                    ValidationIssue(
+                        message=f"{location} must be a dictionary, got {segment._invalid_type}",
                         location=location,
                         severity=ValidationSeverity.ERROR,
                         spec_ref="#segments-array",
@@ -2486,7 +2617,16 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
             )
 
             # Validate words in segment
-            if segment.words is not None:
+            if segment._invalid_words_type is not None:
+                issues.append(
+                    ValidationIssue(
+                        message=f"{location}.words must be an array, got {segment._invalid_words_type}",
+                        location=f"{location}.words",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#words-array",
+                    )
+                )
+            elif segment.words is not None:
                 _validate_list_field(
                     segment.words,
                     f"{location}.words",
@@ -2501,6 +2641,16 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
                         issues.append(
                             ValidationIssue(
                                 message=f"{word_location} cannot be None",
+                                location=word_location,
+                                severity=ValidationSeverity.ERROR,
+                                spec_ref="#words-array",
+                            )
+                        )
+                        continue
+                    if getattr(word, "_invalid_type", None):
+                        issues.append(
+                            ValidationIssue(
+                                message=f"{word_location} must be a dictionary, got {word._invalid_type}",
                                 location=word_location,
                                 severity=ValidationSeverity.ERROR,
                                 spec_ref="#words-array",
@@ -2608,6 +2758,16 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
 
         # Validate source if present
         if metadata.source is not None:
+            if getattr(metadata.source, "_invalid_type", None):
+                issues.append(
+                    ValidationIssue(
+                        message=f"'metadata.source' must be a dictionary, got {metadata.source._invalid_type}",
+                        location="metadata.source",
+                        severity=ValidationSeverity.ERROR,
+                        spec_ref="#metadata-source",
+                    )
+                )
+                return issues
             source_location = "metadata.source"
             issues.extend(
                 _check_unexpected_fields(
@@ -2633,7 +2793,8 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
                     issues,
                     _validate_language,
                     "strings",
-                    allow_empty=True,
+                    allow_empty=False,
+                    spec_ref="#empty-array-rules",
                 )
             _validate_optional_field(
                 metadata.source.extensions,
@@ -2650,6 +2811,8 @@ def validate_types(stj: STJ) -> List[ValidationIssue]:
                 issues,
                 _validate_language,
                 "strings",
+                allow_empty=False,
+                spec_ref="#empty-array-rules",
             )
 
         _validate_optional_field(
@@ -2854,7 +3017,7 @@ def validate_styles(transcript: Transcript) -> List[ValidationIssue]:
                                 )
 
         # Validate extensions (type checking is done in validate_types())
-        if style.extensions:
+        if style.extensions is not None:
             issues.extend(
                 validate_extensions(
                     style.extensions, f"transcript.styles[{idx}].extensions"
@@ -3143,11 +3306,11 @@ def validate_all_extensions(stj: STJ) -> List[ValidationIssue]:
 
     # Metadata extensions
     if metadata:
-        if metadata.extensions:
+        if metadata.extensions is not None:
             issues.extend(
                 validate_extensions(metadata.extensions, "metadata.extensions")
             )
-        if metadata.source and metadata.source.extensions:
+        if metadata.source and metadata.source.extensions is not None:
             issues.extend(
                 validate_extensions(
                     metadata.source.extensions, "metadata.source.extensions"
@@ -3158,7 +3321,7 @@ def validate_all_extensions(stj: STJ) -> List[ValidationIssue]:
     if transcript:
         # Validate segment extensions
         for idx, segment in enumerate(transcript.segments or []):
-            if segment.extensions:
+            if segment.extensions is not None:
                 issues.extend(
                     validate_extensions(
                         segment.extensions, f"transcript.segments[{idx}].extensions"
@@ -3166,7 +3329,7 @@ def validate_all_extensions(stj: STJ) -> List[ValidationIssue]:
                 )
 
             for word_idx, word in enumerate(segment.words or []):
-                if word.extensions:
+                if word.extensions is not None:
                     issues.extend(
                         validate_extensions(
                             word.extensions,
@@ -3176,7 +3339,7 @@ def validate_all_extensions(stj: STJ) -> List[ValidationIssue]:
 
         # Speaker extensions
         for idx, speaker in enumerate(transcript.speakers or []):
-            if speaker.extensions:
+            if speaker.extensions is not None:
                 issues.extend(
                     validate_extensions(
                         speaker.extensions, f"transcript.speakers[{idx}].extensions"
@@ -3185,7 +3348,7 @@ def validate_all_extensions(stj: STJ) -> List[ValidationIssue]:
 
         # Style extensions
         for idx, style in enumerate(transcript.styles or []):
-            if style.extensions:
+            if style.extensions is not None:
                 issues.extend(
                     validate_extensions(
                         style.extensions, f"transcript.styles[{idx}].extensions"
@@ -3307,7 +3470,7 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
     Example:
         ```python
         # Perform complete STJ validation
-        stj = STJ(version="0.6.0", transcript=transcript_data)
+        stj = STJ(version="0.6.1", transcript=transcript_data)
         issues = validate_stj(stj)
 
         # Check validation results
@@ -3325,41 +3488,32 @@ def validate_stj(stj: STJ) -> List[ValidationIssue]:
         - Provides detailed location information for issues
         - References relevant specification sections
     """
-    issues = []
+    issues: List[ValidationIssue] = []
 
-    # Structure Validation
-    issues.extend(validate_root_structure(stj))
-    if issues:  # Stop if root structure is invalid
-        return issues
+    root_issues = validate_root_structure(stj)
+    issues.extend(root_issues)
+    root_valid = not root_issues
 
-    # Version Validation
     issues.extend(validate_version(stj.version))
-    if issues:
-        return issues
 
-    # Validate transcript (including empty segments check)
-    issues.extend(validate_transcript(stj.transcript))
+    transcript_issues = validate_transcript(stj.transcript)
+    issues.extend(transcript_issues)
+    transcript_available = stj.transcript is not None
 
-    # Only proceed with other validations if basic structure is valid
-    if not issues:
-        # Field Validation
+    if root_valid:
         issues.extend(validate_types(stj))
 
-        # Reference Validation
-        issues.extend(validate_references(stj.transcript))
+        if transcript_available:
+            issues.extend(validate_references(stj.transcript))
 
-        # Validate metadata if present
         if stj.metadata:
             issues.extend(validate_metadata(stj.metadata))
 
-        # Validate language codes and consistency
         issues.extend(validate_language_codes(stj.metadata, stj.transcript))
-        issues.extend(validate_language_consistency(stj.metadata, stj.transcript))
+        if transcript_available:
+            issues.extend(validate_language_consistency(stj.metadata, stj.transcript))
+            issues.extend(validate_confidence_scores(stj.transcript))
 
-        # Validate confidence scores
-        issues.extend(validate_confidence_scores(stj.transcript))
-
-        # Extensions Validation
         issues.extend(validate_all_extensions(stj))
 
     return issues
@@ -3436,13 +3590,15 @@ def _handle_segment_overlap(
     segment2.start = overlap_end
 
     # Create new segment for overlap region
+    confidence1 = _confidence_numeric_value(segment1.confidence)
+    confidence2 = _confidence_numeric_value(segment2.confidence)
     overlap_segment = Segment(
         text=f"{segment1.text} {segment2.text}",
         start=overlap_start,
         end=overlap_end,
         speaker_id=segment1.speaker_id,  # Use properties from first segment
-        confidence=min(segment1.confidence, segment2.confidence)
-        if segment1.confidence and segment2.confidence
+        confidence=min(confidence1, confidence2)
+        if confidence1 is not None and confidence2 is not None
         else None,
     )
 
@@ -3469,6 +3625,8 @@ def _can_merge_segments(segment1: Segment, segment2: Segment) -> bool:
 
 def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
     """Merge two overlapping segments into one."""
+    confidence1 = _confidence_numeric_value(segment1.confidence)
+    confidence2 = _confidence_numeric_value(segment2.confidence)
     return Segment(
         text=f"{segment1.text} {segment2.text}",
         start=min(segment1.start, segment2.start),
@@ -3476,8 +3634,8 @@ def _merge_segments(segment1: Segment, segment2: Segment) -> Segment:
         speaker_id=segment1.speaker_id,
         style_id=segment1.style_id,
         language=segment1.language,
-        confidence=min(segment1.confidence, segment2.confidence)
-        if segment1.confidence and segment2.confidence
+        confidence=min(confidence1, confidence2)
+        if confidence1 is not None and confidence2 is not None
         else None,
         word_timing_mode=WordTimingMode.PARTIAL
         if segment1.words or segment2.words

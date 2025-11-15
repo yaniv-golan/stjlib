@@ -46,7 +46,7 @@ def test_load_valid_stj():
     """
     stj_data = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": "TestTranscriber", "version": "1.0.0"},
                 "created_at": datetime.now(timezone.utc)
@@ -74,7 +74,7 @@ def test_load_valid_stj():
     stj = StandardTranscriptionJSON.from_dict(stj_data)
     assert isinstance(stj, StandardTranscriptionJSON)
     assert stj.metadata.transcriber.name == "TestTranscriber"
-    assert stj._stj.version == "0.6.0"
+    assert stj._stj.version == "0.6.1"
     assert stj.transcript.segments[0].text == "Hello world"
 
 
@@ -131,7 +131,7 @@ def test_validate_invalid_confidence():
     """
     stj_data = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": "TestTranscriber", "version": "1.0"},
                 "created_at": datetime.now(timezone.utc)
@@ -170,7 +170,7 @@ def test_validate_invalid_language_code():
     """
     stj_data = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": "TestTranscriber", "version": "1.0"},
                 "created_at": datetime.now(timezone.utc)
@@ -204,7 +204,7 @@ def test_missing_required_fields():
     """
     stj_data = {
         "stj": {
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "created_at": datetime.now(timezone.utc)
                 .isoformat()
@@ -251,7 +251,7 @@ def test_serialization():
     stj_dict = stj.to_dict()
     expected_dict = {
         "stj": {  # Single nesting as per spec
-            "version": "0.6.0",
+            "version": "0.6.1",
             "metadata": {
                 "transcriber": {"name": "TestTranscriber", "version": "1.0"},
                 "created_at": "2023-01-01T00:00:00Z",
@@ -320,6 +320,22 @@ def test_stj_no_double_nesting():
     assert "stj" not in data["stj"]
 
 
+def test_to_dict_preserves_unknown_root_fields():
+    """Ensure fields outside the known schema survive round trips."""
+    stj_data = {
+        "stj": {
+            "version": "0.6.1",
+            "transcript": {"segments": [{"text": "Sample"}]},
+            "custom": {"foo": "bar"},
+        }
+    }
+    stj = StandardTranscriptionJSON.from_dict(stj_data)
+    output = stj.to_dict()
+
+    assert "custom" in output["stj"]
+    assert output["stj"]["custom"] == {"foo": "bar"}
+
+
 def test_empty_transcript_serialization():
     """Test serialization of empty transcript."""
     stj = StandardTranscriptionJSON(transcript=Transcript(segments=[]))
@@ -372,7 +388,7 @@ def test_invalid_metadata_structure():
     stj = StandardTranscriptionJSON.from_dict(
         {
             "stj": {
-                "version": "0.6.0",
+                "version": "0.6.1",
                 "metadata": "invalid",  # Should be dict
                 "transcript": {"segments": [{"text": "Test"}]},
             }
@@ -385,7 +401,7 @@ def test_invalid_metadata_structure():
     stj = StandardTranscriptionJSON.from_dict(
         {
             "stj": {
-                "version": "0.6.0",
+                "version": "0.6.1",
                 "metadata": {
                     "transcriber": "invalid",  # Should be dict
                 },
@@ -402,7 +418,7 @@ def test_invalid_transcript_structure():
     # Test missing segments
     with pytest.raises(ValidationError) as exc_info:
         StandardTranscriptionJSON.from_dict(
-            {"stj": {"version": "0.6.0", "transcript": {}}},  # Missing segments array
+            {"stj": {"version": "0.6.1", "transcript": {}}},  # Missing segments array
             validate=True,
         )
     assert "transcript.segments cannot be empty" in str(exc_info.value)
@@ -412,7 +428,7 @@ def test_invalid_transcript_structure():
         StandardTranscriptionJSON.from_dict(
             {
                 "stj": {
-                    "version": "0.6.0",
+                    "version": "0.6.1",
                     "transcript": {"segments": "invalid"},  # Should be array
                 }
             },

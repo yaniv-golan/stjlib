@@ -13,7 +13,16 @@ import sphinx_rtd_theme
 project = 'STJLib'
 copyright = '2024, Yaniv Golan'
 author = 'Yaniv Golan'
-release = '0.1.0'
+
+# Add the project root to the Python path before importing stjlib
+sys.path.insert(0, os.path.abspath('../..'))
+
+try:
+    from stjlib import __version__ as _stj_version
+except Exception:
+    _stj_version = "0.6.0"
+
+release = _stj_version
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -32,19 +41,6 @@ exclude_patterns = []
 
 html_theme = 'sphinx_rtd_theme'
 # html_static_path = ['_static']
-
-# Add the project root to the Python path
-sys.path.insert(0, os.path.abspath('../..'))
-
-# Debugging information
-print("Python version:", sys.version)
-print(f"sphinx_rtd_theme version: {sphinx_rtd_theme.__version__}")
-
-try:
-    import stjlib
-    print("Successfully imported stjlib")
-except ImportError as e:
-    print("Failed to import stjlib:", str(e))
 
 autodoc_type_aliases = {
     'Transcriber': 'stjlib.stj.Transcriber',

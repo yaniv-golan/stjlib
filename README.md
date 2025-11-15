@@ -23,7 +23,7 @@ Full documentation is available at [stjlib.readthedocs.io](https://stjlib.readth
 
 ## Features
 
-- Full support for STJ format version 0.6.0
+- Full support for STJ format version 0.6.1
 - Comprehensive validation system with severity levels (ERROR, WARNING, INFO)
 - Time value precision handling with IEEE 754 round-to-nearest-even
 - Strict language code validation (ISO 639-1/639-3)
@@ -49,7 +49,7 @@ from stjlib import StandardTranscriptionJSON
 stj = StandardTranscriptionJSON.from_file('path/to/file.stjson', validate=True)
 
 # Or create a new STJ document
-stj = StandardTranscriptionJSON(version="0.6.0")
+stj = StandardTranscriptionJSON(version="0.6.1")
 
 # Add transcriber information
 stj.metadata.transcriber = {
